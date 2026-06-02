@@ -1,4 +1,5 @@
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -100,7 +101,7 @@ def test_validate_cli_runs_against_fixture(mini_masterbook):
         "- [tier-2/optional](tier-2/optional.md)\n"
     )
     result = subprocess.run(
-        [".venv/bin/python", str(VALIDATE), str(mini_masterbook)],
+        [sys.executable, str(VALIDATE), str(mini_masterbook)],
         cwd=str(Path(__file__).resolve().parents[1]),
         capture_output=True,
         text=True,
@@ -118,7 +119,7 @@ def test_validate_cli_fails_on_bad_module(mini_masterbook):
         "- [tier-2/optional](tier-2/optional.md)\n"
     )
     result = subprocess.run(
-        [".venv/bin/python", str(VALIDATE), str(mini_masterbook)],
+        [sys.executable, str(VALIDATE), str(mini_masterbook)],
         cwd=str(Path(__file__).resolve().parents[1]),
         capture_output=True,
         text=True,
@@ -149,7 +150,7 @@ def test_validate_cli_walks_substrate_modules(mini_masterbook):
         "- [tier-2/optional](tier-2/optional.md)\n"
     )
     result = subprocess.run(
-        [".venv/bin/python", str(VALIDATE), str(mini_masterbook)],
+        [sys.executable, str(VALIDATE), str(mini_masterbook)],
         cwd=str(Path(__file__).resolve().parents[1]),
         capture_output=True,
         text=True,
@@ -177,7 +178,7 @@ def test_validate_cli_fails_on_bad_substrate_module(mini_masterbook):
         "- [tier-2/optional](tier-2/optional.md)\n"
     )
     result = subprocess.run(
-        [".venv/bin/python", str(VALIDATE), str(mini_masterbook)],
+        [sys.executable, str(VALIDATE), str(mini_masterbook)],
         cwd=str(Path(__file__).resolve().parents[1]),
         capture_output=True,
         text=True,

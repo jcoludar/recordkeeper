@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 # scripts/ is the home of the audit module.
-SCRIPTS = Path(__file__).resolve().parent.parent.parent / "scripts"
+SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from publishability_audit import (  # noqa: E402

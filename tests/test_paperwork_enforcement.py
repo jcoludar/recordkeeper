@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-MASTERBOOK = REPO_ROOT / "masterbook"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+MASTERBOOK = REPO_ROOT
 FIXTURE_SRC = MASTERBOOK / "tests" / "fixtures" / "with_paperwork_enforcement" / "project"
 
 
