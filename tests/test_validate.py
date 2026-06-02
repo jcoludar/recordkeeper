@@ -101,7 +101,7 @@ def test_validate_cli_runs_against_fixture(mini_masterbook):
     )
     result = subprocess.run(
         [".venv/bin/python", str(VALIDATE), str(mini_masterbook)],
-        cwd="/path/to/repo",
+        cwd=str(Path(__file__).resolve().parents[1]),
         capture_output=True,
         text=True,
     )
@@ -119,7 +119,7 @@ def test_validate_cli_fails_on_bad_module(mini_masterbook):
     )
     result = subprocess.run(
         [".venv/bin/python", str(VALIDATE), str(mini_masterbook)],
-        cwd="/path/to/repo",
+        cwd=str(Path(__file__).resolve().parents[1]),
         capture_output=True,
         text=True,
     )
@@ -150,7 +150,7 @@ def test_validate_cli_walks_substrate_modules(mini_masterbook):
     )
     result = subprocess.run(
         [".venv/bin/python", str(VALIDATE), str(mini_masterbook)],
-        cwd="/path/to/repo",
+        cwd=str(Path(__file__).resolve().parents[1]),
         capture_output=True,
         text=True,
     )
@@ -178,7 +178,7 @@ def test_validate_cli_fails_on_bad_substrate_module(mini_masterbook):
     )
     result = subprocess.run(
         [".venv/bin/python", str(VALIDATE), str(mini_masterbook)],
-        cwd="/path/to/repo",
+        cwd=str(Path(__file__).resolve().parents[1]),
         capture_output=True,
         text=True,
     )

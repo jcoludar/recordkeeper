@@ -414,7 +414,7 @@ def test_assemble_cli_end_to_end(mini_masterbook, sample_project):
     # The CLI takes (masterbook_root, project_path) as args and writes artifacts in place.
     result = subprocess.run(
         [".venv/bin/python", str(ASSEMBLE), str(mini_masterbook), str(sample_project)],
-        cwd="/path/to/repo",
+        cwd=str(Path(__file__).resolve().parents[1]),
         capture_output=True,
         text=True,
     )

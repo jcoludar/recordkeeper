@@ -67,7 +67,7 @@ Three file classes, three policies:
 
 ## "Share folder" / kit-as-deliverable is a new artifact class
 
-**Source:** `substrate/cross-repo-orientation` + `share/example-tool-dev-kit/`.
+**Source:** `substrate/cross-repo-orientation` + `share/example-backend-dev-kit/`.
 **Promote when:** a second kit ships to a third-party recipient.
 
 - Masterbook so far assumes the consumer is *a project the masterbook author owns*. Kits ship to third-party recipients (students, collaborators) who don't have masterbook installed.
