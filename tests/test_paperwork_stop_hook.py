@@ -34,9 +34,13 @@ def _empty_project(tmp_path: Path) -> Path:
     return project
 
 
+_FIXTURE_DATE = "2026-05-13"
+_FIXTURE_STARTED_AT = "2026-05-13T08:00:00+02:00"
+
+
 def _project_with_inflight_log(
     tmp_path: Path,
-    started_at: str = "2026-05-13T08:00:00+02:00",
+    started_at: str = _FIXTURE_STARTED_AT,
     slug: str = "wave-3",
     sessions_dir: str = "sessions",
 ) -> Path:
@@ -44,9 +48,9 @@ def _project_with_inflight_log(
     project.mkdir()
     sessions = project / sessions_dir
     sessions.mkdir(parents=True)
-    log = sessions / f"2026-05-13-{slug}.md"
+    log = sessions / f"{_FIXTURE_DATE}-{slug}.md"
     log.write_text(
-        f"---\ndate: 2026-05-13\nstarted_at: {started_at}\nslug: {slug}\nstatus: done\nfollowups: []\n---\n\nbody\n"
+        f"---\ndate: {_FIXTURE_DATE}\nstarted_at: {started_at}\nslug: {slug}\nstatus: done\nfollowups: []\n---\n\nbody\n"
     )
     return project
 
@@ -128,14 +132,16 @@ def test_passing_rules_exit_zero_silent(tmp_path, monkeypatch, capsys):
     project = _project_with_inflight_log(tmp_path)
     _write_config(project, "files:\n  - path: 'sessions/{today}-{session-slug}.md'\n    must-exist: true\n")
     # Pre-populate the edit log to mark the session log as modified.
-    started_at = "2026-05-13T08:00:00+02:00"
+    started_at = _FIXTURE_STARTED_AT
     log_path = project / ".claude" / "state" / "paperwork-edit-log.jsonl"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_text(json.dumps({
         "started_at": started_at, "ts": started_at,
-        "tool": "Edit", "path": f"sessions/2026-05-13-wave-3.md",
+        "tool": "Edit", "path": f"sessions/{_FIXTURE_DATE}-wave-3.md",
     }) + "\n")
     # No `must-be-modified-this-session: true` so this only checks must-exist.
+    # Pin {today} to the fixture date so the resolved path matches the fixture file.
+    monkeypatch.setattr(hook, "_today_iso", lambda: _FIXTURE_DATE)
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
     monkeypatch.setattr("sys.stdin", StringIO("{}"))
     rc = hook.main()
@@ -159,6 +165,8 @@ def test_failing_rules_exit_two_with_report(tmp_path, monkeypatch, capsys):
         "    frontmatter:\n"
         "      missing_field: {required: true}\n",  # field absent → fails
     )
+    # Pin {today} to the fixture date so the resolved path matches the fixture file.
+    monkeypatch.setattr(hook, "_today_iso", lambda: _FIXTURE_DATE)
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
     monkeypatch.setattr("sys.stdin", StringIO("{}"))
     rc = hook.main()
@@ -205,6 +213,8 @@ def test_configurable_session_log_dir_used(tmp_path, monkeypatch, capsys):
         "  - path: 'docs/sessions/{today}-{session-slug}.md'\n"
         "    must-exist: true\n",
     )
+    # Pin {today} to the fixture date so the resolved path matches the fixture file.
+    monkeypatch.setattr(hook, "_today_iso", lambda: _FIXTURE_DATE)
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
     monkeypatch.setattr("sys.stdin", StringIO("{}"))
     rc = hook.main()
