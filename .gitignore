@@ -4,3 +4,8 @@ __pycache__/
 .pytest_cache/
 .venv/
 .DS_Store
+
+# example project: assembler outputs (regenerate with `tools/assemble.py . examples/minimal-project`)
+examples/minimal-project/CLAUDE.md
+examples/minimal-project/AGENTS.md
+examples/minimal-project/.claude/

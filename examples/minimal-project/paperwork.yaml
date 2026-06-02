@@ -1,0 +1,12 @@
+session-log-dir: "sessions"
+
+files:
+  - path: "sessions/{today}-{session-slug}.md"
+    must-exist: true
+    must-be-modified-this-session: true
+    frontmatter:
+      status:
+        required: true
+        in: [done, paused]
+      slug:
+        required: true

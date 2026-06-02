@@ -1,0 +1,12 @@
+session-log-dir: "sessions"
+
+files:
+  - path: "sessions/{today}-{session-slug}.md"
+    must-exist: true
+    must-be-modified-this-session: true
+
+consistency:
+  - name: "Every finding ID in the session log also appears in TECHNICAL_DEBT.md"
+    find: 'F\d+'
+    in: "sessions/{today}-*.md"
+    must-also-appear-in: ["TECHNICAL_DEBT.md"]
