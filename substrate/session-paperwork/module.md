@@ -3,6 +3,9 @@ id: substrate/session-paperwork
 name: Session paperwork
 tier: substrate
 default: false
+applies_when: "project keeps per-session logs under sessions/ (or docs/sessions/)"
+conflicts_with: []
+requires: []
 summary: Slash commands and a Stop hook for per-session paperwork discipline — begin / debrief / accurate end-time tracking.
 ---
 

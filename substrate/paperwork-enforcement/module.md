@@ -3,9 +3,11 @@ id: substrate/paperwork-enforcement
 name: Paperwork enforcement
 tier: substrate
 default: false
-summary: Blocking Stop-hook + rule engine that enforces a project's paperwork contract declared in .claude/paperwork.yaml.
+applies_when: "project has a .claude/paperwork.yaml describing required artifacts"
+conflicts_with: []
 requires:
   - substrate/session-paperwork
+summary: Blocking Stop-hook + rule engine that enforces a project's paperwork contract declared in .claude/paperwork.yaml.
 ---
 
 ## When to opt in
