@@ -25,7 +25,7 @@ hook-contract gotchas the docs don't.
 ## Quickstart
 
 ```bash
-git clone https://github.com/jcoludar/recordkeeper.git ~/code/recordkeeper
+git clone https://github.com/OWNER/recordkeeper.git ~/code/recordkeeper
 pip install -r ~/code/recordkeeper/requirements.txt
 
 cp -r ~/code/recordkeeper/examples/minimal-project ~/my-claude-project

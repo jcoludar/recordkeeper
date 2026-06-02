@@ -1,4 +1,4 @@
-"""Self-validate the masterbook tree."""
+"""Self-validate the recordkeeper tree."""
 from __future__ import annotations
 
 import re
@@ -158,7 +158,7 @@ import argparse
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate the masterbook tree.")
+    parser = argparse.ArgumentParser(description="Validate the recordkeeper tree.")
     parser.add_argument("masterbook_root", type=Path)
     args = parser.parse_args(argv)
 
@@ -214,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"VALIDATION ERROR: {e}", file=sys.stderr)
         return 1
 
-    print(f"masterbook OK: {root}")
+    print(f"recordkeeper OK: {root}")
     return 0
 
 

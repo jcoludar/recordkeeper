@@ -5,7 +5,7 @@ Get to a working blocking Stop hook in five minutes.
 ## 1. Clone the repo
 
 ```bash
-git clone https://github.com/jcoludar/recordkeeper.git ~/code/recordkeeper
+git clone https://github.com/OWNER/recordkeeper.git ~/code/recordkeeper
 ```
 
 ## 2. Install Python dependencies

@@ -11,7 +11,7 @@ summary: Every project documents how to undo before it has need of one.
 
 # Recovery path
 
-Every project ships with a populated `RECOVERY.md` (template in `masterbook/helpers/recovery_template.md`) describing, in order of preference, how to undo a destructive action. Each project picks the path that applies to its data:
+Every project ships with a populated `RECOVERY.md` (template in `helpers/recovery_template.md`) describing, in order of preference, how to undo a destructive action. Each project picks the path that applies to its data:
 
 1. **Cloud-sync version history** (default for `data/` cloud-sync-linked projects): right-click → Version history (single file) or Rewind folder (folder-level). 30+ days of history per file.
 2. **Local backup snapshot** (default for non-cloud-sync content).

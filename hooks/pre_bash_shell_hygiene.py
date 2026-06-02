@@ -248,7 +248,7 @@ def main() -> None:
 
     if violations:
         msg = "Shell hygiene violation:\n" + "\n".join(f"  - {v}" for v in violations)
-        msg += "\n\nReference: tier-1/shell-hygiene module in masterbook."
+        msg += "\n\nReference: tier-1/shell-hygiene module."
         print(msg, file=sys.stderr)
         sys.exit(2)
 

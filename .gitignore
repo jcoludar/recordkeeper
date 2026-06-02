@@ -8,4 +8,5 @@ __pycache__/
 # example project: assembler outputs (regenerate with `tools/assemble.py . examples/minimal-project`)
 examples/minimal-project/CLAUDE.md
 examples/minimal-project/AGENTS.md
-examples/minimal-project/.claude/
+examples/minimal-project/.claude/*
+!examples/minimal-project/.claude/paperwork.yaml
