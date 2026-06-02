@@ -1,0 +1,69 @@
+# .claude/paperwork.yaml — paperwork-enforcement substrate config
+#
+# Drop this file into your project's .claude/ directory, edit to suit, and the
+# paperwork-enforcement Stop hook will use it. Missing file = substrate is a
+# silent no-op for the project.
+#
+# Validate offline:
+#   python .claude/hooks/stop_paperwork_check.py --validate-config .claude/paperwork.yaml
+
+# Optional. Default: "sessions".
+# ExampleProject-style projects with logs under docs/sessions/ set this to "docs/sessions".
+session-log-dir: "sessions"
+
+# List of file-rule entries. Each entry declares what a given file (or glob
+# of files) must look like at session end. All keys after `path:` are
+# optional — an entry with only `path:` is a no-op.
+files:
+
+  # Example: today's session log must exist, must have been modified this
+  # session, and must have required frontmatter fields.
+  #
+  # `{today}` expands to YYYY-MM-DD (system local timezone).
+  # `{session-slug}` expands to the in-flight session log's `slug:` value.
+  # Other tokens are out of scope in v1 — use regex (`matches:`) to validate
+  # session-specific IDs etc.
+  - path: "sessions/{today}-{session-slug}.md"
+    must-exist: true
+    must-be-modified-this-session: true
+    frontmatter:
+      date:
+        required: true
+        equals: "{today}"
+      started_at:
+        required: true
+        matches: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}$"
+      slug:
+        required: true
+        equals: "{session-slug}"
+      status:
+        required: true
+        in: [done, paused]
+      followups:
+        required: true
+
+  # Example with a conditional `when:` clause — handoff doc must exist and
+  # be modified-this-session, but only if any file under src/ was modified.
+  #
+  # - path: "handoffs/post-{today}-{session-slug}.md"
+  #   when:
+  #     when-files-modified-matching: "src/**"
+  #   must-exist: true
+  #   must-be-modified-this-session: true
+
+# List of consistency rules: cross-document presence checks. For every regex
+# capture from the source file's body (frontmatter is excluded), the literal
+# capture must appear in every listed target.
+#
+# Glob targets: capture must appear in at least one matched file.
+# Path targets: capture must appear in that exact file.
+consistency:
+
+  # Example: every F<N> finding mentioned in the session log must also appear
+  # in TECHNICAL_DEBT.md.
+  #
+  # - name: "every F<N> finding in session log appears in TECHNICAL_DEBT"
+  #   find: "F\\d+"
+  #   in: "sessions/{today}-{session-slug}.md"
+  #   must-also-appear-in:
+  #     - "TECHNICAL_DEBT.md"

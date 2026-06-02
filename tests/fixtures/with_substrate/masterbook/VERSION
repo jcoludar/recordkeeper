@@ -1,0 +1,8 @@
+---
+version: 0.0.1
+length_budget:
+  global_words: 4000
+  per_module_words: 600
+---
+
+Test fixture for substrate-aware assembly.

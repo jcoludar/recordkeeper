@@ -1,0 +1,9 @@
+files:
+  - path: "sessions/{today}-{session-slug}.md"
+    must-exist: true
+    must-be-modified-this-session: true
+    frontmatter:
+      date: {required: true, equals: "{today}"}
+      slug: {required: true, equals: "{session-slug}"}
+      status: {required: true, in: [done, paused]}
+      followups: {required: true}

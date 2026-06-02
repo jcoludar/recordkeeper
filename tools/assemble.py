@@ -1,0 +1,503 @@
+"""Assemble per-project CLAUDE.md + AGENTS.md + settings.json from masterbook modules."""
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import yaml
+
+
+class FrontmatterError(ValueError):
+    """Raised when a markdown file's YAML frontmatter is missing or malformed."""
+
+
+class SubstrateDependencyError(Exception):
+    """Raised when a requested substrate's required-substrate dependency is missing."""
+
+
+def parse_frontmatter(text: str) -> tuple[dict, str]:
+    """Split a markdown file into (frontmatter dict, body string).
+
+    Frontmatter must open with `---\\n` on the first line and close with a `\\n---\\n` later.
+    """
+    if not text.startswith("---\n"):
+        raise FrontmatterError("file does not start with '---' fence")
+    rest = text[4:]
+    end = rest.find("\n---\n")
+    if end == -1:
+        # Allow trailing fence without newline
+        end = rest.find("\n---")
+        if end == -1 or rest[end + 4 :].strip() != "":
+            raise FrontmatterError("frontmatter fence not closed")
+    fm_text = rest[:end]
+    body = rest[end + 5 :] if rest[end:].startswith("\n---\n") else rest[end + 4 :]
+    try:
+        fm = yaml.safe_load(fm_text) or {}
+    except yaml.YAMLError as exc:
+        raise FrontmatterError(f"invalid YAML in frontmatter: {exc}") from exc
+    if not isinstance(fm, dict):
+        raise FrontmatterError(f"frontmatter must be a YAML mapping, got {type(fm).__name__}")
+    return fm, body
+
+
+from pathlib import Path
+
+
+def expand_module_list(masterbook_root: Path, requested: list[str]) -> list[Path]:
+    """Resolve a list of module patterns into ordered, deduped Path objects.
+
+    Patterns:
+      - 'tier-1/*' or 'tier-2/*'  → all .md files in that directory
+      - 'tier-1/foo' or 'tier-1/foo.md' → that single file (extension optional)
+
+    Order: tier-1 modules always come before tier-2; within a tier, alphabetical.
+    """
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for pattern in requested:
+        if pattern.endswith("/*"):
+            tier_dir = masterbook_root / pattern[:-2]
+            if not tier_dir.is_dir():
+                raise FileNotFoundError(f"tier directory not found: {tier_dir}")
+            for path in sorted(tier_dir.glob("*.md")):
+                if path not in seen:
+                    seen.add(path)
+                    out.append(path)
+        else:
+            base = pattern if pattern.endswith(".md") else pattern + ".md"
+            path = masterbook_root / base
+            if not path.is_file():
+                raise FileNotFoundError(f"module not found: {path}")
+            if path not in seen:
+                seen.add(path)
+                out.append(path)
+    out.sort(key=lambda p: (0 if "tier-1" in p.parts else 1, p.name))
+    return out
+
+
+def expand_substrate_list(masterbook_root: Path, requested: list[str]) -> list[Path]:
+    """Resolve a list of substrate names into ordered Path objects (preserves declaration order).
+
+    Each name 'foo' resolves to 'masterbook/substrate/foo/module.md'. Raises FileNotFoundError
+    if a name has no corresponding directory.
+    """
+    out: list[Path] = []
+    for name in requested:
+        mod = masterbook_root / "substrate" / name / "module.md"
+        if not mod.is_file():
+            raise FileNotFoundError(f"substrate not found: {mod}")
+        out.append(mod)
+    return out
+
+
+def check_substrate_dependencies(masterbook_root: Path, substrates: list[str]) -> None:
+    """For each requested substrate, check its `requires:` frontmatter — every entry
+    must also be in `substrates`. Raises SubstrateDependencyError on the first miss.
+    """
+    requested_ids = {f"substrate/{name}" for name in substrates}
+    for name in substrates:
+        module = masterbook_root / "substrate" / name / "module.md"
+        if not module.is_file():
+            continue
+        fm, _ = parse_frontmatter(module.read_text())
+        requires = fm.get("requires", []) or []
+        if not isinstance(requires, list):
+            raise SubstrateDependencyError(
+                f"substrate/{name}: `requires:` must be a list"
+            )
+        for required_id in requires:
+            if required_id not in requested_ids:
+                raise SubstrateDependencyError(
+                    f"substrate/{name} requires {required_id}, "
+                    f"but it is not in the project's substrates list. "
+                    f"Add `{required_id.removeprefix('substrate/')}` to "
+                    f"`masterbook.substrates` in CLAUDE.source.md."
+                )
+
+
+def compute_module_hash(path: Path) -> str:
+    """SHA256 of normalized content (LF line endings, no trailing whitespace), truncated to 12 hex."""
+    raw = path.read_bytes()
+    normalized = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n").rstrip(b"\n") + b"\n"
+    return hashlib.sha256(normalized).hexdigest()[:12]
+
+
+BANNER = """\
+# Generated by masterbook
+
+> **Do not edit by hand.** Edit `CLAUDE.source.md` instead, then rebuild:
+> `python <masterbook>/tools/assemble.py <this-repo>`
+"""
+
+
+def render_claude_md(
+    *,
+    masterbook_root: Path,
+    project_source: Path,
+    version: str,
+    built: str,
+) -> str:
+    """Build the assembled CLAUDE.md content as a string.
+
+    Frontmatter: built date, masterbook version, per-module + per-substrate sha hashes.
+    Body: banner + tier module bodies (in tier order) + substrate bodies (in declaration order)
+    + the source's project-specific body.
+    """
+    src_text = project_source.read_text()
+    src_fm, src_body = parse_frontmatter(src_text)
+    mb = src_fm.get("masterbook", {})
+    requested = mb.get("modules", [])
+    requested_subs = mb.get("substrates", [])
+    excluded = set(mb.get("exclude", []))
+
+    module_paths = expand_module_list(masterbook_root, requested)
+    module_paths = [p for p in module_paths if _module_id(p, masterbook_root) not in excluded]
+    substrate_paths = expand_substrate_list(masterbook_root, requested_subs)
+
+    all_paths = module_paths + substrate_paths
+    module_lines = []
+    for p in all_paths:
+        h = compute_module_hash(p)
+        module_lines.append(f"  - {_module_id(p, masterbook_root)}@sha:{h}")
+
+    out_fm = (
+        "---\n"
+        f"built: {built}\n"
+        f"version: {version}\n"
+        "modules:\n" + "\n".join(module_lines) + "\n"
+        "---\n\n"
+    )
+
+    body_parts = [BANNER, ""]
+    for p in all_paths:
+        _fm, body = parse_frontmatter(p.read_text())
+        body_parts.append(body.strip())
+        body_parts.append("")
+
+    body_parts.append(src_body.strip())
+    body_parts.append("")
+
+    return out_fm + "\n".join(body_parts)
+
+
+def _module_id(path: Path, masterbook_root: Path) -> str:
+    """Compute the module id (e.g., 'tier-1/example' or 'substrate/store-write-approval') from a path.
+
+    Convention: a file named 'module.md' inside a named directory uses the parent path as id
+    (e.g., substrate/<name>/module.md → 'substrate/<name>'). Other files use the path with .md stripped.
+    """
+    rel = path.relative_to(masterbook_root)
+    if path.name == "module.md":
+        return "/".join(rel.parts[:-1])
+    return rel.with_suffix("").as_posix()
+
+
+def merge_settings(
+    *,
+    masterbook_root: Path,
+    substrates: list[str],
+    permissions_extra: list[str],
+) -> dict:
+    """Merge always-on top-level fragments + selected substrate fragments + project extras.
+
+    Reads ALL .json files in masterbook/settings-fragments/ unconditionally (always-on baselines).
+    Reads masterbook/substrate/<name>/settings-fragment.json for each name in `substrates`.
+    Merges both `permissions.allow` (string dedup) and `hooks` blocks (tuple dedup).
+    """
+    fragments_dir = masterbook_root / "settings-fragments"
+
+    allow: list[str] = []
+    raw_hook_entries: list[tuple[str, dict]] = []  # list of (event, entry_dict)
+
+    def _ingest(frag: dict) -> None:
+        allow.extend(frag.get("permissions", {}).get("allow", []))
+        for event, entries in frag.get("hooks", {}).items():
+            for entry in entries:
+                raw_hook_entries.append((event, entry))
+
+    if fragments_dir.is_dir():
+        for frag_path in sorted(fragments_dir.glob("*.json")):
+            _ingest(json.loads(frag_path.read_text()))
+
+    for name in substrates:
+        frag_path = masterbook_root / "substrate" / name / "settings-fragment.json"
+        if frag_path.is_file():
+            _ingest(json.loads(frag_path.read_text()))
+
+    allow.extend(permissions_extra)
+
+    # Stable dedupe of permissions (preserve first-seen order).
+    seen_perms: set[str] = set()
+    deduped_perms: list[str] = []
+    for p in allow:
+        if p not in seen_perms:
+            seen_perms.add(p)
+            deduped_perms.append(p)
+
+    # Dedupe hook entries by (event, matcher, command) tuple. Preserve first-seen order.
+    seen_hooks: set[tuple[str, str | None, str]] = set()
+    events: dict[str, list] = {}
+    for event, entry in raw_hook_entries:
+        matcher = entry.get("matcher")
+        # An entry's `hooks` is a list of {type, command} dicts.
+        for sub in entry.get("hooks", []):
+            cmd = sub.get("command", "")
+            key = (event, matcher, cmd)
+            if key in seen_hooks:
+                continue
+            seen_hooks.add(key)
+            # Normalize a clean entry per (matcher, command).
+            clean_entry: dict = {"hooks": [{"type": "command", "command": cmd}]}
+            if matcher is not None:
+                clean_entry["matcher"] = matcher
+            events.setdefault(event, []).append(clean_entry)
+
+    out: dict = {
+        "$schema": "https://json.schemastore.org/claude-code-settings.json",
+        "permissions": {"allow": deduped_perms},
+    }
+    if events:
+        out["hooks"] = events
+    return out
+
+
+def emit_agents_md(claude_md: Path) -> Path:
+    """Create AGENTS.md as a symlink to CLAUDE.md (fallback: copy).
+
+    Returns the AGENTS.md path.
+    """
+    agents = claude_md.parent / "AGENTS.md"
+    if agents.exists() or agents.is_symlink():
+        agents.unlink()
+    try:
+        agents.symlink_to(claude_md.name)  # relative to its own directory
+    except OSError:
+        # Filesystem doesn't support symlinks (rare on macOS but possible on some FS).
+        shutil.copy2(claude_md, agents)
+    return agents
+
+
+def deploy_commands(
+    *,
+    masterbook_root: Path,
+    project_path: Path,
+    commands: list[str],
+    substrates: list[str],
+) -> list[Path]:
+    """Copy slash command markdown files into <project>/.claude/commands/.
+
+    Sources:
+      - `masterbook/commands/<name>.md` for each name in `commands` (top-level, opt-in by name).
+      - `masterbook/substrate/<sub>/commands/*.md` for each substrate in `substrates`
+        (bundled with the substrate; opt-in by virtue of opting into the substrate).
+
+    Collisions (two sources writing the same destination filename) raise RuntimeError.
+    Returns the list of deployed destination paths.
+    """
+    src_paths: list[Path] = []
+    top_dir = masterbook_root / "commands"
+    for cmd in commands:
+        src = top_dir / f"{cmd}.md"
+        if not src.is_file():
+            raise FileNotFoundError(f"slash command not found: {src}")
+        src_paths.append(src)
+    for name in substrates:
+        sub_cmds = masterbook_root / "substrate" / name / "commands"
+        if sub_cmds.is_dir():
+            src_paths.extend(sorted(sub_cmds.glob("*.md")))
+
+    seen: dict[str, Path] = {}
+    for src in src_paths:
+        prior = seen.get(src.name)
+        if prior is not None:
+            raise RuntimeError(
+                f"slash-command filename collision for '{src.name}': {prior} vs {src}"
+            )
+        seen[src.name] = src
+
+    dst_dir = project_path / ".claude" / "commands"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    deployed: list[Path] = []
+    for src in src_paths:
+        dst = dst_dir / src.name
+        shutil.copy2(src, dst)
+        deployed.append(dst)
+    return deployed
+
+
+def deploy_hooks(
+    *,
+    masterbook_root: Path,
+    substrates: list[str],
+    project_path: Path,
+) -> list[Path]:
+    """Copy baseline + selected-substrate hook .py files into <project>/.claude/hooks/.
+
+    Returns the list of deployed destination paths.
+    Raises RuntimeError on filename collision between any two sources.
+    """
+    src_paths: list[Path] = []
+    baseline_dir = masterbook_root / "hooks"
+    if baseline_dir.is_dir():
+        src_paths.extend(sorted(baseline_dir.glob("*.py")))
+    for name in substrates:
+        sub_hooks = masterbook_root / "substrate" / name / "hooks"
+        if sub_hooks.is_dir():
+            src_paths.extend(sorted(sub_hooks.glob("*.py")))
+
+    # Detect filename collisions.
+    seen: dict[str, Path] = {}
+    for src in src_paths:
+        prior = seen.get(src.name)
+        if prior is not None:
+            raise RuntimeError(
+                f"hook filename collision for '{src.name}': {prior} vs {src}"
+            )
+        seen[src.name] = src
+
+    dst_dir = project_path / ".claude" / "hooks"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    deployed: list[Path] = []
+    for src in src_paths:
+        dst = dst_dir / src.name
+        shutil.copy2(src, dst)
+        deployed.append(dst)
+    return deployed
+
+
+def check_length_budget(text: str, *, budget_words: int) -> str | None:
+    """Return a warning message if `text` exceeds `budget_words`, else None."""
+    n = len(text.split())
+    if n > budget_words:
+        return f"assembled CLAUDE.md is {n} words; exceeds soft budget of {budget_words}"
+    return None
+
+
+def check_mtime_inversion(source: Path, artifact: Path) -> str | None:
+    """Return warning if artifact is newer than source (i.e., someone hand-edited the artifact)."""
+    if not artifact.exists() or not source.exists():
+        return None
+    if artifact.stat().st_mtime > source.stat().st_mtime + 1.0:  # 1s tolerance
+        return f"{artifact} is newer than {source} — possible hand-edited artifact"
+    return None
+
+
+import argparse
+import datetime as _dt
+import sys
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Assemble masterbook artifacts for a project.")
+    # Named-flag interface (preferred by tests and new callers).
+    parser.add_argument("--masterbook", type=Path, dest="masterbook_flag")
+    parser.add_argument("--source", type=Path, dest="source_flag")
+    parser.add_argument("--out", type=Path, dest="out_flag")
+    # Legacy positional interface (kept for backward compat with existing CLI callers).
+    parser.add_argument("masterbook_pos", type=Path, nargs="?")
+    parser.add_argument("project_pos", type=Path, nargs="?")
+    args = parser.parse_args(argv)
+
+    # Resolve masterbook_root and project_path from either interface.
+    if args.masterbook_flag is not None:
+        masterbook_root: Path = args.masterbook_flag.resolve()
+    elif args.masterbook_pos is not None:
+        masterbook_root = args.masterbook_pos.resolve()
+    else:
+        print("error: masterbook root not specified", file=sys.stderr)
+        return 1
+
+    # source / project_path
+    if args.source_flag is not None:
+        source: Path = args.source_flag.resolve()
+        project_path: Path = source.parent
+    elif args.project_pos is not None:
+        project_path = args.project_pos.resolve()
+        source = project_path / "CLAUDE.source.md"
+    else:
+        print("error: project path or --source not specified", file=sys.stderr)
+        return 1
+
+    # artifact output path
+    if args.out_flag is not None:
+        artifact: Path = args.out_flag.resolve()
+    else:
+        artifact = project_path / "CLAUDE.md"
+
+    version_text = (masterbook_root / "VERSION").read_text()
+    version_fm, _ = parse_frontmatter(version_text)
+    version = str(version_fm.get("version", "0.0.0"))
+    budget = version_fm.get("length_budget", {}).get("global_words", 4000)
+
+    if not source.is_file():
+        print(f"error: {source} does not exist", file=sys.stderr)
+        return 1
+
+    src_fm, _ = parse_frontmatter(source.read_text())
+    mb_block = src_fm.get("masterbook", {})
+    requested = mb_block.get("modules", [])
+    requested_subs = mb_block.get("substrates", [])
+    permissions_extra = mb_block.get("permissions_extra", [])
+    commands = mb_block.get("commands", [])
+
+    check_substrate_dependencies(masterbook_root, requested_subs)
+
+    today = _dt.date.today().isoformat()
+    claude_text = render_claude_md(
+        masterbook_root=masterbook_root,
+        project_source=source,
+        version=version,
+        built=today,
+    )
+
+    # mtime warning before overwrite
+    mtime_warn = check_mtime_inversion(source, artifact)
+    if mtime_warn:
+        print(f"warning: {mtime_warn}", file=sys.stderr)
+
+    artifact.write_text(claude_text)
+
+    # length budget warning after write
+    budget_warn = check_length_budget(claude_text, budget_words=budget)
+    if budget_warn:
+        print(f"warning: {budget_warn}", file=sys.stderr)
+
+    emit_agents_md(artifact)
+
+    settings_obj = merge_settings(
+        masterbook_root=masterbook_root,
+        substrates=requested_subs,
+        permissions_extra=permissions_extra,
+    )
+
+    settings_path = project_path / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    import json as _json
+    settings_path.write_text(_json.dumps(settings_obj, indent=2) + "\n")
+
+    deploy_commands(
+        masterbook_root=masterbook_root,
+        project_path=project_path,
+        commands=commands,
+        substrates=requested_subs,
+    )
+
+    deploy_hooks(
+        masterbook_root=masterbook_root,
+        substrates=requested_subs,
+        project_path=project_path,
+    )
+
+    module_paths = expand_module_list(masterbook_root, requested)
+    excluded = set(mb_block.get("exclude", []))
+    module_paths = [p for p in module_paths if _module_id(p, masterbook_root) not in excluded]
+
+    print(
+        f"assembled {artifact} from {len(module_paths)} modules "
+        f"+ {len(requested_subs)} substrates; built {today}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
