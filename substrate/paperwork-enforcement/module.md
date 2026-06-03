@@ -27,7 +27,7 @@ The substrate becomes active only when the project also writes `.claude/paperwor
 Top-level shape:
 
 ```yaml
-session-log-dir: "sessions"     # default; example-project-style projects set "docs/sessions"
+session-log-dir: "sessions"     # default; projects that keep logs under docs/sessions/ set "docs/sessions"
 files:                           # list of file-rule entries
   - path: "sessions/{today}-{session-slug}.md"
     must-exist: true

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import sys
 import traceback
@@ -173,12 +174,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.validate_config is not None:
         return cfg.validate_config_cli(args.validate_config)
 
-    # Drain stdin (Stop hook receives an envelope; we don't use it but the
-    # harness expects us to read it).
+    # Read the Stop envelope. Honor stop_hook_active: if we already blocked once
+    # and Claude is re-invoking Stop, bow out with 0. A blocking Stop hook that
+    # ignores this can infinite-loop and lose the whole session (Anthropic #55754).
+    raw = ""
     try:
-        sys.stdin.read()
+        raw = sys.stdin.read()
     except Exception:
-        pass
+        raw = ""
+    try:
+        payload = json.loads(raw) if raw.strip() else {}
+    except Exception:
+        payload = {}
+    if isinstance(payload, dict) and payload.get("stop_hook_active"):
+        return 0
 
     project_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()).resolve()
     try:

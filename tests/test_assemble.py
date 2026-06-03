@@ -529,14 +529,19 @@ def test_deploy_hooks_collision_raises(mini_masterbook, tmp_path):
     assert "dup.py" in str(exc.value)
 
 
-def test_deploy_hooks_preserves_executable_bit(mini_masterbook, tmp_path):
-    """copy2 preserves executable bit (matters for hooks Claude Code runs)."""
+def test_deploy_hooks_makes_hooks_executable_from_nonexec_source(mini_masterbook, tmp_path):
+    """Deployed hooks must be executable EVEN when the committed source is 0644.
+
+    The harness invokes hooks by path; a non-executable hook fails with exit 126
+    (permission denied) and a blocking Stop hook then silently fails open. So the
+    assembler must set +x on deploy regardless of the source's mode.
+    """
     import os, stat
     hooks_src = mini_masterbook / "hooks"
     hooks_src.mkdir(exist_ok=True)
     src = hooks_src / "exe.py"
     src.write_text("#!/usr/bin/env python3\nprint('x')\n")
-    os.chmod(src, 0o755)
+    os.chmod(src, 0o644)  # the real shipped state — git stores hooks 100644
     project = tmp_path / "proj"
     project.mkdir()
     deploy_hooks(masterbook_root=mini_masterbook, substrates=[], project_path=project)

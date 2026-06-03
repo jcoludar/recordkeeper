@@ -10,7 +10,7 @@ HOOK = Path(__file__).resolve().parent.parent / "hooks" / "stop_session_log.py"
 
 def _run(payload: dict, project_root: Path) -> subprocess.CompletedProcess:
     env = os.environ.copy()
-    env["PROJECT_ROOT"] = str(project_root)
+    env["CLAUDE_PROJECT_DIR"] = str(project_root)
     return subprocess.run(
         ["/usr/bin/env", "python3", str(HOOK)],
         input=json.dumps(payload),

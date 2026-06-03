@@ -14,7 +14,7 @@ git clone https://github.com/jcoludar/recordkeeper.git ~/code/recordkeeper
 pip install -r ~/code/recordkeeper/requirements.txt
 ```
 
-You need Python 3.11+ and `pyyaml`. `pytest` is required only if you want to run recordkeeper's own test suite.
+You need Python 3.11+ and `pyyaml`. To run recordkeeper's own test suite, install the dev extras too: `pip install -r ~/code/recordkeeper/requirements-dev.txt`.
 
 ## 3. Copy the example project
 
@@ -35,7 +35,7 @@ This writes `CLAUDE.md` and `.claude/` (containing `settings.json`, hooks, and s
 
 ## 5. Start a Claude Code session in the project
 
-Open Claude Code in `~/my-claude-project`. The `SessionStart` hook (if you ship one) orients you; the `/begin-session` slash command creates a session log under `sessions/`.
+Open Claude Code in `~/my-claude-project`. The `/begin-session` slash command orients you and creates a session log under `sessions/`.
 
 ## 6. Try to end the session without paperwork
 

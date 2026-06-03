@@ -16,10 +16,10 @@ A substrate is a directory under `substrate/<your-substrate-name>/`. Inside:
 
 ```yaml
 ---
-id: <kebab-slug>
+id: substrate/<kebab-slug>
 name: <Human Readable Name>
 tier: substrate
-default: opt-in | opt-out
+default: true | false
 applies_when: "<short condition describing when this substrate is relevant>"
 conflicts_with: [<list of substrate ids this substrate cannot coexist with>]
 requires: [<list of substrate ids this substrate depends on>]
@@ -28,7 +28,9 @@ summary: |
 ---
 ```
 
-All 8 fields are required. `tools/validate.py` enforces this.
+The first five fields (`id`, `name`, `tier`, `default`, `summary`) are required and
+enforced by `tools/validate.py`. `applies_when`, `conflicts_with`, and `requires` are
+required by convention but not yet machine-validated.
 
 ## `settings-fragment.json`
 
@@ -44,7 +46,7 @@ Example fragment registering a Stop hook:
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/my_stop_check.py"
+            "command": "/usr/bin/env python3 $CLAUDE_PROJECT_DIR/.claude/hooks/my_stop_check.py"
           }
         ]
       }
@@ -55,7 +57,7 @@ Example fragment registering a Stop hook:
 
 ## Hook scripts
 
-Live under `hooks/<your-script>.py`. The assembler copies them into `<project>/.claude/hooks/`. Reference them in `settings-fragment.json` via `$CLAUDE_PROJECT_DIR/.claude/hooks/<your-script>.py`.
+Live under `hooks/<your-script>.py`. The assembler copies them into `<project>/.claude/hooks/` (and sets `+x`). Reference them in `settings-fragment.json` via `/usr/bin/env python3 $CLAUDE_PROJECT_DIR/.claude/hooks/<your-script>.py`.
 
 Read `docs/hook-contracts.md` for the contract details (matcher fields, exit codes, output formats, `stop_hook_active`).
 

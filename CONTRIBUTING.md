@@ -8,10 +8,10 @@ A substrate is a self-contained bundle of slash commands, hooks, and config frag
 
 ```yaml
 ---
-id: <kebab-slug>
+id: substrate/<kebab-slug>
 name: <Human Readable Name>
 tier: substrate
-default: opt-in | opt-out
+default: true | false
 applies_when: "<short condition describing when this substrate is relevant>"
 conflicts_with: [<other substrate ids>]
 requires: [<substrate ids this one depends on>]
@@ -24,7 +24,7 @@ The body of `module.md` describes the substrate's contract, behavior, and any co
 
 ## The rule-of-two promotion model
 
-Some content lives in `PARKING_LOT.md` first — a rule or observation that came from one project. It graduates into `tier-1/` or `tier-2/` when the same rule needs to apply to a second project. Don't promote prematurely.
+Some content lives in `PARKING_LOT.md` first — a rule or observation that came from one project. It graduates into `tier-1/` (or `tier-2/`, a reserved opt-in tier that currently ships no modules) when the same rule needs to apply to a second project. Don't promote prematurely.
 
 ## Test discipline — subagent pressure test
 
@@ -38,5 +38,5 @@ For substrates that ship process discipline (paperwork, verification, gated hand
 
 - One substrate per PR where possible.
 - Include the subagent pressure test results in the PR description for discipline-ship substrates.
-- Run `pytest tests/` and `python scripts/publishability_audit.py .` before opening; both must pass.
+- Run `pytest tests/` before opening; it must pass. Scan your changes for personal paths, names, or private project references before publishing.
 - Small, focused commits beat large mega-PRs.

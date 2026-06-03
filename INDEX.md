@@ -25,7 +25,3 @@ This index is the contract `tools/validate.py` checks: every module listed here 
 
 - `tools/assemble.py` — composes selected substrates into a project's `CLAUDE.md` and `.claude/` directory.
 - `tools/validate.py` — validates this index against the on-disk tree.
-
-## Audit & meta-tools
-
-- `scripts/publishability_audit.py` — leakage scanner; run before releases.

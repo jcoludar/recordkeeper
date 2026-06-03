@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop hook — at end of assistant response, ensure today's session log exists.
 
-Project root is taken from $PROJECT_ROOT (preferred) or cwd.
+Project root is taken from $CLAUDE_PROJECT_DIR (preferred) or cwd.
 Session logs live in <project>/sessions/YYYY-MM-DD-*.md.
 Honors `stop_hook_active` to avoid recursion.
 """
@@ -11,7 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-REPO = Path(os.environ.get("PROJECT_ROOT") or Path.cwd())
+REPO = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path.cwd())
 SESSIONS = REPO / "sessions"
 
 EXCLUDE_DIRS = {".venv", "__pycache__", ".git"}

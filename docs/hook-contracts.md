@@ -44,7 +44,7 @@ Phrase `additionalContext` as factual statements, not imperative instructions. A
 
 ## CLAUDE_PROJECT_DIR
 
-`$CLAUDE_PROJECT_DIR` is the canonical absolute path for the project. Always quote it. In `settings.json` `command:` fields, use a bare path — the shebang inside the .py does the work; don't prefix with `/usr/bin/env python3`.
+`$CLAUDE_PROJECT_DIR` is the canonical absolute path for the project. Always quote it. In `settings.json` `command:` fields, invoke the interpreter explicitly — `/usr/bin/env python3 $CLAUDE_PROJECT_DIR/.claude/hooks/foo.py`. Don't rely on the shebang + execute bit alone: the assembler copies hooks (and git / cross-platform checkouts can drop the `+x` mode), so a bare path can fail with exit `126` (permission denied) and a blocking Stop hook then silently fails *open*. recordkeeper's assembler also sets `+x` on deploy as defense in depth, but the explicit interpreter is the portable contract.
 
 ## stop_hook_active and infinite loops
 

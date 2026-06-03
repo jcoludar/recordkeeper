@@ -18,7 +18,7 @@ The assembler is the only build step. After it runs, the target project has no r
 
 ## Blocking enforcement
 
-A **blocking Stop hook** is a Python script registered as a Stop hook in `.claude/settings.json`. When Claude Code emits a Stop event (the model trying to end its turn), the hook runs. If it exits non-zero, the Stop event is refused — the model gets the stderr as feedback and tries again.
+A **blocking Stop hook** is a Python script registered as a Stop hook in `.claude/settings.json`. When Claude Code emits a Stop event (the model trying to end its turn), the hook runs. If it exits 2, the Stop event is refused — the model gets the stderr as feedback and tries again.
 
 recordkeeper's `paperwork-enforcement` substrate ships a blocking Stop hook driven by a declarative `paperwork.yaml`. The YAML describes which files must exist, which frontmatter fields are required, which content must appear in multiple places. The Stop hook refuses to let a session end until those rules are satisfied.
 

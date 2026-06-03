@@ -19,8 +19,8 @@ pick into a single `CLAUDE.md` plus a populated `.claude/` directory. One build
 step, no runtime dependency on this repo after install.
 
 Five-minute install, MIT, Python + PyYAML, no npm. Read [`PARKING_LOT.md`](./PARKING_LOT.md)
-first if you're authoring your own hooks — it documents eleven Anthropic
-hook-contract gotchas the docs don't.
+first if you're authoring your own hooks — it documents hard-won Anthropic
+hook-contract gotchas plus other substrate-engineering lessons the docs don't.
 
 ## Quickstart
 

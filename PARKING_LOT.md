@@ -5,9 +5,10 @@ tier-1 or tier-2 module the second time the same rule (or a near-equivalent)
 needs to apply elsewhere. Until then they live here, with a pointer to the
 project they came from.
 
-*Note: some entries reference substrates or kit infrastructure that is private to
-the upstream masterbook source and not yet shipped publicly; those references
-have been generalized.*
+*Note: these entries originated in a private substrate library (referred to as
+"masterbook" throughout — the acknowledged upstream name). Some referenced
+substrates and kit infrastructure are private to that source and not yet shipped
+publicly.*
 
 ---
 
@@ -26,7 +27,7 @@ once already; recording so they don't again.
 - **10,000-char hard cap** on hook output (additionalContext, systemMessage, plain stdout — all of them). Overflow spills to a file. Future-proof: leave headroom (~5k for `additionalContext`).
 - **Phrase `additionalContext` as factual statements, not imperative instructions.** Anthropic explicitly flags imperative phrasing as a prompt-injection vector. "Workspace: …" not "You are in …".
 - **Exit codes:** `0` silent; `0 + JSON` for structured control; `2` blocking error (stderr fed to Claude). Pick one approach per hook — never mix exit code 2 with JSON.
-- **`$CLAUDE_PROJECT_DIR`** is the canonical absolute path. Always quote it. Bare path (no `/usr/bin/env python3` prefix) in `settings.json` `command:` fields — the shebang inside the .py does the work.
+- **`$CLAUDE_PROJECT_DIR`** is the canonical absolute path. Always quote it. Invoke hooks with an explicit `/usr/bin/env python3` prefix in `settings.json` `command:` fields — don't rely on the shebang + execute bit, because the assembler copies hooks and git / cross-platform checkouts can drop the `+x` mode (a bare path then fails with exit `126` and a blocking Stop hook fails *open*).
 - **Forward-looking: `stop_hook_active`.** If a Stop hook ever blocks (exit 2), it MUST check the `stop_hook_active` field in input JSON before exiting non-zero — otherwise Claude can infinite-loop on it (Anthropic issue #55754, entire session can be lost). Audit `paperwork-enforcement/stop_paperwork_check.py` next time it's touched.
 
 ## Subagents are context-isolated
@@ -119,11 +120,11 @@ Three file classes, three policies:
 - Existing substrates that omit any of these should be backfilled.
 - `assemble.py` could grow a validator that errors on missing fields, but for now this is convention not enforcement.
 
-## Iron Law / Red Flags / Rationalization tables as superpowers house style
+## Iron Law / Red Flags / Rationalization tables as reference-skill house style
 
 **Source:** ongoing masterbook work (Skills review).
 **Promote when:** a substrate ships discipline content that needs to bite.
 
-- Reference superpowers skills (verification-before-completion, systematic-debugging) lead with: an Iron Law (e.g., "NO CLAIM WITHOUT EVIDENCE"), a Red Flags table ("these thoughts mean STOP"), and a Common Rationalizations table.
+- Reference discipline skills (e.g. verification-before-completion, systematic-debugging) lead with: an Iron Law (e.g., "NO CLAIM WITHOUT EVIDENCE"), a Red Flags table ("these thoughts mean STOP"), and a Common Rationalizations table.
 - Numbered-list recipes ("do these 5 things") read like suggestions; the three-section structure reads like enforcement.
 - Some current substrates ship lightweight Red Flags tables only. Adopt the full pattern for any substrate that enforces a load-bearing process.

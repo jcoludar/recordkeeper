@@ -61,10 +61,21 @@ def main() -> int:
         return 0
 
     project_dir = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()).resolve()
-    sessions_dir = project_dir / "sessions"  # session-log-dir for this hook is hardcoded
-    # (paperwork.yaml could override, but the PostToolUse hook stays cheap — it
-    # doesn't load the config. If a project uses a non-default session-log-dir,
-    # accept the limitation; Stop hook fail-loud will surface the gap.)
+    # Resolve the session-log dir from paperwork.yaml so non-default layouts
+    # (e.g. docs/sessions) still get their edits recorded. Stay non-blocking:
+    # any config problem falls back to the default "sessions".
+    session_log_dir = "sessions"
+    try:
+        import _paperwork_config as cfg
+
+        config_path = project_dir / ".claude" / "paperwork.yaml"
+        if config_path.is_file():
+            session_log_dir = cfg.load_and_validate(config_path).get(
+                "session-log-dir", "sessions"
+            )
+    except Exception:
+        session_log_dir = "sessions"
+    sessions_dir = project_dir / session_log_dir
     inflight = sl.find_in_flight_log(sessions_dir)
     if inflight is None:
         return 0  # silent no-op

@@ -8,7 +8,7 @@
 #   python .claude/hooks/stop_paperwork_check.py --validate-config .claude/paperwork.yaml
 
 # Optional. Default: "sessions".
-# example-project-style projects with logs under docs/sessions/ set this to "docs/sessions".
+# Projects that keep logs under docs/sessions/ set this to "docs/sessions".
 session-log-dir: "sessions"
 
 # List of file-rule entries. Each entry declares what a given file (or glob

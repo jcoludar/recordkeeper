@@ -89,6 +89,31 @@ def test_malformed_config_exits_two(tmp_path, monkeypatch, capsys):
     assert "malformed yaml" in err
 
 
+# ── stop_hook_active recursion guard ──────────────────────────────────────
+
+
+def test_stop_hook_active_bows_out_without_blocking(tmp_path, monkeypatch, capsys):
+    """A re-entrant Stop (stop_hook_active=true) must exit 0 even when rules would
+    otherwise fail — else a blocking Stop hook can infinite-loop and lose the
+    whole session (Anthropic #55754)."""
+    hook = _load_hook()
+    project = _empty_project(tmp_path)
+    # Needs session context; with no in-flight log this blocks (exit 2) normally.
+    _write_config(
+        project,
+        "files:\n  - path: 'sessions/{today}-{session-slug}.md'\n    must-exist: true\n",
+    )
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    # Sanity: without the flag, this configuration blocks.
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    assert hook.main() == 2
+    capsys.readouterr()  # drain the block message from the first call
+    # With stop_hook_active set, the hook bows out cleanly and prints nothing.
+    monkeypatch.setattr("sys.stdin", StringIO(json.dumps({"stop_hook_active": True})))
+    assert hook.main() == 0
+    assert capsys.readouterr().err == ""
+
+
 def test_unknown_top_level_key_exits_two(tmp_path, monkeypatch, capsys):
     hook = _load_hook()
     project = _empty_project(tmp_path)
