@@ -58,6 +58,36 @@ def now_iso() -> str:
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+_STARTED_AT_RE = re.compile(r"^started_at:\s*(\S+)", re.MULTILINE)
+
+
+def _started_at_value(text: str) -> str | None:
+    """Return the `started_at:` value from the frontmatter region, or None."""
+    fm = _frontmatter_region(text)
+    if fm is None:
+        return None
+    m = _STARTED_AT_RE.search(fm)
+    return m.group(1) if m else None
+
+
+def clamp_ended_at(ended: str, started: str | None) -> str:
+    """Return `ended`, but never earlier than `started` — a session cannot end
+    before it began (guards against clock skew). If `started` is missing or
+    unparseable, or `ended >= started`, `ended` is returned unchanged.
+    """
+    if not started:
+        return ended
+    try:
+        ended_dt = dt.datetime.fromisoformat(ended)
+        started_dt = dt.datetime.fromisoformat(started)
+        if ended_dt < started_dt:
+            return started
+    except (ValueError, TypeError):
+        # Unparseable, or a naive/aware mismatch — don't guess, keep ended.
+        return ended
+    return ended
+
+
 def find_in_flight_log(sessions_dir: Path) -> Path | None:
     """Return the most-recently-mtime'd .md under sessions_dir whose frontmatter
     lacks `ended_at:`. Returns None if directory is missing or no candidates.
@@ -84,30 +114,41 @@ def find_in_flight_log(sessions_dir: Path) -> Path | None:
 
 
 def main() -> int:
-    project_dir = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    sessions_dir = Path(project_dir) / "sessions"
-    if not sessions_dir.is_dir():
+    # Non-blocking recorder: ALWAYS exit 0. Any unexpected failure degrades
+    # (logs a warning) rather than blocking the session — a bookkeeping error
+    # must never hold a session hostage (tier-1/hook-resilience: recorders fail
+    # open). exit 1 here would surface a non-blocking error to the user for no gain.
+    try:
+        project_dir = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+        sessions_dir = Path(project_dir) / "sessions"
+        if not sessions_dir.is_dir():
+            print(
+                f"session_stop_log_timing: no sessions/ dir at {sessions_dir}; nothing to do",
+                file=sys.stderr,
+            )
+            return 0
+        path = find_in_flight_log(sessions_dir)
+        if path is None:
+            print(
+                f"session_stop_log_timing: no in-flight session log in {sessions_dir}",
+                file=sys.stderr,
+            )
+            return 0
+        text = path.read_text()
+        timestamp = clamp_ended_at(now_iso(), _started_at_value(text))
+        new_text = insert_ended_at(text, timestamp)
+        path.write_text(new_text)
         print(
-            f"session_stop_log_timing: no sessions/ dir at {sessions_dir}; nothing to do",
+            f"session_stop_log_timing: wrote ended_at={timestamp} into {path.name}",
             file=sys.stderr,
         )
         return 0
-    path = find_in_flight_log(sessions_dir)
-    if path is None:
+    except Exception as exc:  # noqa: BLE001 — recorder fails open and degrades
         print(
-            f"session_stop_log_timing: no in-flight session log in {sessions_dir}",
+            f"session_stop_log_timing: degraded (exit 0), could not write ended_at — {exc}",
             file=sys.stderr,
         )
         return 0
-    text = path.read_text()
-    timestamp = now_iso()
-    new_text = insert_ended_at(text, timestamp)
-    path.write_text(new_text)
-    print(
-        f"session_stop_log_timing: wrote ended_at={timestamp} into {path.name}",
-        file=sys.stderr,
-    )
-    return 0
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ missing required keys. Returns a normalized dict with defaults filled.
 from __future__ import annotations
 
 import difflib
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -26,10 +27,12 @@ FILE_ENTRY_KEYS = {
     "must-be-modified-this-session",
     "frontmatter",
     "when",
+    "tier",
 }
 FRONTMATTER_FIELD_KEYS = {"required", "equals", "in", "matches"}
 WHEN_KEYS = {"when-files-modified-matching"}
-CONSISTENCY_KEYS = {"name", "find", "in", "must-also-appear-in"}
+CONSISTENCY_KEYS = {"name", "find", "in", "must-also-appear-in", "tier"}
+VALID_TIERS = {1, 2}
 
 
 def _did_you_mean(key: str, valid: set[str]) -> str:
@@ -70,6 +73,34 @@ def _validate_when(when_obj: Any, context: str) -> None:
     _check_unknown_keys(when_obj, WHEN_KEYS, f"{context}: when")
 
 
+def _validate_tier(entry: dict[str, Any], context: str) -> None:
+    """A rule's optional `tier:` (1=blocking, 2=deferred) must be 1 or 2."""
+    if "tier" not in entry:
+        return
+    tier = entry["tier"]
+    if tier not in VALID_TIERS:
+        raise ConfigError(
+            f"{context}: `tier` must be one of {sorted(VALID_TIERS)} (1=blocking, 2=deferred), got {tier!r}"
+        )
+
+
+def _validate_find_regex(pattern: Any, context: str) -> None:
+    """`find:` must compile, and have at most one capturing group — `re.findall`
+    returns tuples for >1 group, which the engine's `capture in text` cannot use.
+    Caught at load so `--validate-config` (and CI) fail before Stop time."""
+    if not isinstance(pattern, str):
+        raise ConfigError(f"{context}: `find` must be a string")
+    try:
+        compiled = re.compile(pattern)
+    except re.error as exc:
+        raise ConfigError(f"{context}: `find` is not a valid regex: {exc}") from exc
+    if compiled.groups > 1:
+        raise ConfigError(
+            f"{context}: `find` has {compiled.groups} capturing groups; use at most one "
+            f"(more than one makes re.findall return tuples)"
+        )
+
+
 def _validate_file_entry(entry: Any, idx: int) -> None:
     context = f"files[{idx}]"
     if not isinstance(entry, dict):
@@ -86,6 +117,7 @@ def _validate_file_entry(entry: Any, idx: int) -> None:
             _validate_frontmatter_field(field_name, field_spec, context)
     if "when" in entry:
         _validate_when(entry["when"], context)
+    _validate_tier(entry, context)
 
 
 def _validate_consistency_entry(entry: Any, idx: int) -> None:
@@ -97,6 +129,8 @@ def _validate_consistency_entry(entry: Any, idx: int) -> None:
         _require_key(entry, key, context)
     if not isinstance(entry["must-also-appear-in"], list):
         raise ConfigError(f"{context}: `must-also-appear-in` must be a list")
+    _validate_find_regex(entry["find"], context)
+    _validate_tier(entry, context)
 
 
 def load_and_validate(path: Path) -> dict[str, Any]:

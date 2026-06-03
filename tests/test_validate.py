@@ -31,6 +31,42 @@ def test_validate_module_too_long(tmp_path):
     assert "exceeds" in str(exc.value)
 
 
+def test_validate_module_tier_requires_full_field_set(tmp_path):
+    """tier-1/tier-2 modules must carry the full 8-field frontmatter convention."""
+    from validate import REQUIRED_TIER_MODULE_FIELDS
+
+    p = tmp_path / "tier-1" / "thin.md"
+    p.parent.mkdir(parents=True)
+    # 5 fields only — missing applies_when / conflicts_with / requires.
+    p.write_text("---\nid: tier-1/thin\nname: x\ntier: 1\ndefault: true\nsummary: y\n---\nbody\n")
+    with pytest.raises(ValidationError, match="missing required"):
+        validate_module(
+            p, masterbook_root=tmp_path, max_words=200,
+            required_fields=REQUIRED_TIER_MODULE_FIELDS,
+        )
+
+
+def test_validate_module_substrate_five_fields_ok(tmp_path):
+    """Substrate modules use a leaner 5-field schema (no applies_when/conflicts_with)."""
+    p = tmp_path / "substrate" / "demo" / "module.md"
+    p.parent.mkdir(parents=True)
+    p.write_text(
+        "---\nid: substrate/demo\nname: x\ntier: substrate\ndefault: false\nsummary: y\n---\nbody\n"
+    )
+    validate_module(p, masterbook_root=tmp_path, max_words=200)  # default 5-field set
+
+
+def test_validate_index_accepts_fragment_links(mini_masterbook):
+    """A `#fragment` in an INDEX link must not break module-reference matching."""
+    idx = mini_masterbook / "INDEX.md"
+    idx.write_text(
+        "# INDEX\n\n"
+        "- [tier-1/example](tier-1/example.md#overview)\n"
+        "- [tier-2/optional](tier-2/optional.md)\n"
+    )
+    validate_index(mini_masterbook)  # no exception
+
+
 def test_validate_index_ok(tmp_path, mini_masterbook):
     idx = mini_masterbook / "INDEX.md"
     idx.write_text(

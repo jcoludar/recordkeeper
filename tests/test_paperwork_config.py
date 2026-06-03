@@ -16,6 +16,68 @@ if str(SUBSTRATE_HOOKS) not in sys.path:
 import _paperwork_config as cfg  # noqa: E402
 
 
+# ── tier: annotation ──────────────────────────────────────────────────────
+
+
+def test_file_rule_tier_2_accepted(tmp_path):
+    path = tmp_path / "paperwork.yaml"
+    path.write_text("files:\n  - path: 'a.md'\n    must-exist: true\n    tier: 2\n")
+    result = cfg.load_and_validate(path)
+    assert result["files"][0]["tier"] == 2
+
+
+def test_consistency_rule_tier_2_accepted(tmp_path):
+    path = tmp_path / "paperwork.yaml"
+    path.write_text(
+        "consistency:\n  - name: x\n    find: 'foo'\n    in: a.md\n"
+        "    must-also-appear-in: [b.md]\n    tier: 2\n"
+    )
+    result = cfg.load_and_validate(path)
+    assert result["consistency"][0]["tier"] == 2
+
+
+def test_tier_value_out_of_range_rejected(tmp_path):
+    path = tmp_path / "paperwork.yaml"
+    path.write_text("files:\n  - path: 'a.md'\n    must-exist: true\n    tier: 3\n")
+    with pytest.raises(cfg.ConfigError, match="tier"):
+        cfg.load_and_validate(path)
+
+
+# ── consistency find: regex validated at load ─────────────────────────────
+
+
+def test_consistency_invalid_regex_rejected_at_load(tmp_path):
+    path = tmp_path / "paperwork.yaml"
+    path.write_text(
+        "consistency:\n  - name: x\n    find: '[unclosed'\n    in: a.md\n"
+        "    must-also-appear-in: [b.md]\n"
+    )
+    with pytest.raises(cfg.ConfigError, match="find"):
+        cfg.load_and_validate(path)
+
+
+def test_consistency_multigroup_regex_rejected_at_load(tmp_path):
+    """re.findall returns tuples for >1 capturing group, which the engine's
+    `capture in text` check cannot handle — reject at load, not at Stop time."""
+    path = tmp_path / "paperwork.yaml"
+    path.write_text(
+        "consistency:\n  - name: x\n    find: '(a)(b)'\n    in: a.md\n"
+        "    must-also-appear-in: [b.md]\n"
+    )
+    with pytest.raises(cfg.ConfigError, match="group"):
+        cfg.load_and_validate(path)
+
+
+def test_consistency_single_group_regex_ok(tmp_path):
+    path = tmp_path / "paperwork.yaml"
+    path.write_text(
+        "consistency:\n  - name: x\n    find: 'F(\\d+)'\n    in: a.md\n"
+        "    must-also-appear-in: [b.md]\n"
+    )
+    result = cfg.load_and_validate(path)
+    assert result["consistency"][0]["find"] == "F(\\d+)"
+
+
 # ── load_and_validate ─────────────────────────────────────────────────────
 
 

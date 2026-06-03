@@ -153,6 +153,16 @@ def test_parse_frontmatter_raises_on_malformed_yaml(tmp_path):
         pred.parse_frontmatter_dict(f)
 
 
+def test_parse_frontmatter_raises_on_unclosed_fence(tmp_path):
+    """An opening `---` with no closing fence is present-but-malformed frontmatter,
+    not 'no frontmatter'. It must raise (so the engine reports a parse error), not
+    return None (which would be read as an empty-frontmatter pass/fail)."""
+    f = tmp_path / "x.md"
+    f.write_text("---\nstatus: done\nslug: foo\nno closing fence ever\n")
+    with pytest.raises(pred.FrontmatterParseError):
+        pred.parse_frontmatter_dict(f)
+
+
 # ── check_frontmatter — required ──────────────────────────────────────────
 
 

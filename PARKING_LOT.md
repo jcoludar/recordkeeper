@@ -15,7 +15,14 @@ publicly.*
 ## Claude Code hook contracts (Anthropic-doc-derived)
 
 **Source project:** an earlier private substrate (2026-05-27 spec review).
-**Promote when:** a second substrate ships a SessionStart or Stop hook.
+**Promote when:** a second substrate ships a SessionStart hook (the remaining
+bullets are SessionStart- or deploy-specific).
+
+> **Partially promoted (2026-06-03).** The exit-code contract and the
+> `stop_hook_active` guard graduated to `tier-1/hook-resilience.md` once a
+> second Stop hook shipped (paperwork-enforcement + session-paperwork). The
+> SessionStart-specific bullets below stay here until a second SessionStart hook
+> ships.
 
 The following are not opinions — they're contract details from the Anthropic
 hooks reference (https://code.claude.com/docs/en/hooks). They burned someone
@@ -26,9 +33,7 @@ once already; recording so they don't again.
 - **`additionalContext` should be emitted as structured JSON on stdout**, in the shape `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "..."}, "suppressOutput": true}`. Plain stdout also works for SessionStart but doesn't let you set `suppressOutput`, so the orientation text leaks into the visible transcript.
 - **10,000-char hard cap** on hook output (additionalContext, systemMessage, plain stdout — all of them). Overflow spills to a file. Future-proof: leave headroom (~5k for `additionalContext`).
 - **Phrase `additionalContext` as factual statements, not imperative instructions.** Anthropic explicitly flags imperative phrasing as a prompt-injection vector. "Workspace: …" not "You are in …".
-- **Exit codes:** `0` silent; `0 + JSON` for structured control; `2` blocking error (stderr fed to Claude). Pick one approach per hook — never mix exit code 2 with JSON.
 - **`$CLAUDE_PROJECT_DIR`** is the canonical absolute path. Always quote it. Invoke hooks with an explicit `/usr/bin/env python3` prefix in `settings.json` `command:` fields — don't rely on the shebang + execute bit, because the assembler copies hooks and git / cross-platform checkouts can drop the `+x` mode (a bare path then fails with exit `126` and a blocking Stop hook fails *open*).
-- **Forward-looking: `stop_hook_active`.** If a Stop hook ever blocks (exit 2), it MUST check the `stop_hook_active` field in input JSON before exiting non-zero — otherwise Claude can infinite-loop on it (Anthropic issue #55754, entire session can be lost). Audit `paperwork-enforcement/stop_paperwork_check.py` next time it's touched.
 
 ## Subagents are context-isolated
 

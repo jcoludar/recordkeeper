@@ -32,11 +32,32 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-import _paperwork_config as cfg
-import _paperwork_edit_log as el
-import _paperwork_engine as engine
-import _paperwork_interpolation as interp
-import _paperwork_session_log as sl
+# Helper imports are guarded so a broken dependency fails CLOSED (block) rather
+# than fail-open: a bare ImportError exits 1, which for a Stop hook is a
+# *non-blocking* error — the gate would silently stop enforcing. A gate that
+# cannot run its own code must still block. See tier-1/hook-resilience.
+try:
+    import _paperwork_config as cfg
+    import _paperwork_edit_log as el
+    import _paperwork_engine as engine
+    import _paperwork_interpolation as interp
+    import _paperwork_session_log as sl
+
+    _IMPORT_ERROR: Exception | None = None
+except Exception as exc:  # noqa: BLE001 — any import problem must be catchable
+    _IMPORT_ERROR = exc
+
+_BYPASS_ENV = "PAPERWORK_ENFORCEMENT_BYPASS"
+
+
+def _bypass_requested() -> bool:
+    """True if the operator set the documented escape hatch to a truthy value.
+
+    Checked before any fragile code path so a broken gate never bricks the
+    session (tier-1/hook-resilience: gates fail closed *with a reachable bypass*).
+    """
+    val = os.environ.get(_BYPASS_ENV, "").strip().lower()
+    return val not in ("", "0", "false", "no", "off")
 
 
 def _today_iso() -> str:
@@ -153,10 +174,16 @@ def _run_stop_hook(project_dir: Path) -> int:
     failures = engine.run_all(
         config=resolved, project_dir=project_dir, edit_log=session_entries
     )
-    if not failures:
-        return 0
-    print(engine.format_report(failures), file=sys.stderr, end="")
-    return 2
+    # tier 1 (default) blocks the Stop; tier 2 is deferred — surfaced as an
+    # advisory but never blocks. See tier:1|2 rule annotation.
+    blocking = [f for f in failures if f.tier == 1]
+    deferred = [f for f in failures if f.tier != 1]
+    if deferred:
+        print(engine.format_advisory(deferred), file=sys.stderr, end="")
+    if blocking:
+        print(engine.format_report(blocking), file=sys.stderr, end="")
+        return 2
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -172,7 +199,32 @@ def main(argv: list[str] | None = None) -> int:
     args, _extra = parser.parse_known_args(argv)
 
     if args.validate_config is not None:
+        if _IMPORT_ERROR is not None:
+            print(
+                f"paperwork-enforcement: hook dependencies failed to load — {_IMPORT_ERROR}",
+                file=sys.stderr,
+            )
+            return 2
         return cfg.validate_config_cli(args.validate_config)
+
+    # Reachable bypass — checked FIRST, before stdin handling or any import that
+    # could have failed, so the operator can always clear a broken gate to fix it.
+    if _bypass_requested():
+        print(
+            f"paperwork-enforcement: BYPASSED via {_BYPASS_ENV} — gate not enforced this Stop.",
+            file=sys.stderr,
+        )
+        return 0
+
+    # If our own dependencies could not load, fail CLOSED (block) and advertise
+    # the bypass (tier-1/hook-resilience). exit 1 would be non-blocking = fail-open.
+    if _IMPORT_ERROR is not None:
+        print(
+            f"paperwork-enforcement: hook dependencies failed to load — {_IMPORT_ERROR}. "
+            f"Failing closed (Stop blocked). Set {_BYPASS_ENV}=1 to override.",
+            file=sys.stderr,
+        )
+        return 2
 
     # Read the Stop envelope. Honor stop_hook_active: if we already blocked once
     # and Claude is re-invoking Stop, bow out with 0. A blocking Stop hook that

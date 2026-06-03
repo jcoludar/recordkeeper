@@ -456,3 +456,44 @@ def test_format_report_groups_failures_by_label():
 
 def test_format_report_empty_when_no_failures():
     assert engine.format_report([]) == ""
+
+
+# ── tier: annotation ──────────────────────────────────────────────────────
+
+
+def test_failure_default_tier_is_one():
+    f = engine.Failure("[files] x.md", "reason")
+    assert f.tier == 1
+
+
+def test_file_rule_failure_carries_rule_tier(tmp_path):
+    failures = engine.evaluate_file_rule(
+        rule={"path": "sessions/missing.md", "must-exist": True, "tier": 2},
+        project_dir=tmp_path,
+        edit_log=[],
+    )
+    assert len(failures) == 1
+    assert failures[0].tier == 2
+
+
+def test_consistency_failure_carries_rule_tier(tmp_path):
+    (tmp_path / "src.md").write_text("F1 appears here\n")
+    (tmp_path / "target.md").write_text("nothing relevant\n")
+    failures = engine.evaluate_consistency_rule(
+        rule={
+            "name": "x", "find": "F1", "in": "src.md",
+            "must-also-appear-in": ["target.md"], "tier": 2,
+        },
+        project_dir=tmp_path,
+    )
+    assert len(failures) == 1
+    assert failures[0].tier == 2
+
+
+def test_format_advisory_renders_deferred_without_blocking_footer():
+    failures = [engine.Failure("[files] x.md", "frontmatter.note missing", tier=2)]
+    out = engine.format_advisory(failures)
+    assert "deferred" in out.lower()
+    assert "frontmatter.note missing" in out
+    # Must NOT carry the blocking call-to-action — these don't block the session.
+    assert "end the session again" not in out.lower()

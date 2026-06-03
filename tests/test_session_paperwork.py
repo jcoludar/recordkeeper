@@ -197,6 +197,32 @@ def test_find_in_flight_log_skips_files_without_frontmatter(tmp_path):
     assert result.name == "open.md"
 
 
+# ── clamp_ended_at (end >= start) ─────────────────────────────────────────
+
+
+def test_clamp_ended_at_clamps_up_when_end_before_start():
+    """A session cannot end before it began; clock skew that yields an earlier
+    end-time is clamped up to started_at."""
+    hook = _load_hook()
+    started = "2026-05-12T10:00:00+02:00"
+    earlier = "2026-05-12T09:00:00+02:00"
+    assert hook.clamp_ended_at(earlier, started) == started
+
+
+def test_clamp_ended_at_keeps_later_end():
+    hook = _load_hook()
+    started = "2026-05-12T10:00:00+02:00"
+    later = "2026-05-12T11:30:00+02:00"
+    assert hook.clamp_ended_at(later, started) == later
+
+
+def test_clamp_ended_at_passthrough_on_unparseable_or_missing_started():
+    hook = _load_hook()
+    ended = "2026-05-12T11:30:00+02:00"
+    assert hook.clamp_ended_at(ended, "not-a-timestamp") == ended
+    assert hook.clamp_ended_at(ended, None) == ended
+
+
 # ── main() integration ────────────────────────────────────────────────────
 
 
@@ -271,6 +297,45 @@ def test_main_no_in_flight_log(tmp_path, monkeypatch, capsys):
     assert rc == 0
     captured = capsys.readouterr()
     assert "no in-flight" in captured.err
+
+
+def test_main_clamps_ended_at_to_started_when_clock_skewed(tmp_path, monkeypatch):
+    hook = _load_hook()
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    started = "2026-05-12T10:00:00+02:00"
+    log = sessions / "2026-05-12-foo.md"
+    log.write_text(
+        f"---\ndate: 2026-05-12\nstarted_at: {started}\nslug: foo\n---\n\n# Body\n"
+    )
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    # now() reports a time *before* the session started (clock skew).
+    monkeypatch.setattr(hook, "now_iso", lambda: "2026-05-12T09:00:00+02:00")
+    rc = hook.main()
+    assert rc == 0
+    assert f"ended_at: {started}" in log.read_text()
+
+
+def test_main_fails_open_on_internal_error(tmp_path, monkeypatch, capsys):
+    """A non-blocking recorder must exit 0 even if its own code throws — never block
+    the session because bookkeeping broke (tier-1/hook-resilience: recorders fail open)."""
+    hook = _load_hook()
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    log = sessions / "2026-05-12-foo.md"
+    log.write_text(
+        "---\ndate: 2026-05-12\nstarted_at: 2026-05-12T08:00:00+02:00\nslug: foo\n---\n\n# Body\n"
+    )
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+
+    def boom(*a, **k):
+        raise RuntimeError("disk gone")
+
+    monkeypatch.setattr(hook, "insert_ended_at", boom)
+    rc = hook.main()
+    err = capsys.readouterr().err
+    assert rc == 0
+    assert "session_stop_log_timing" in err
 
 
 def test_main_multiple_in_flight_picks_newest(tmp_path, monkeypatch):

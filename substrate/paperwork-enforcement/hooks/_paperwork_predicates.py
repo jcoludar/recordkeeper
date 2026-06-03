@@ -117,7 +117,10 @@ def parse_frontmatter_dict(path: Path) -> dict[str, Any] | None:
         return None
     end = text.find(_FM_CLOSE, len(_FM_OPEN))
     if end == -1:
-        return None
+        # Opening fence with no closing fence: present-but-malformed frontmatter,
+        # not "no frontmatter". Raise so the engine reports a parse error rather
+        # than silently treating the file as having empty frontmatter.
+        raise FrontmatterParseError(f"{path}: frontmatter opened but never closed")
     region = text[len(_FM_OPEN):end]
     try:
         data = yaml.safe_load(region)

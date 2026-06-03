@@ -14,17 +14,30 @@ class ValidationError(Exception):
     """Raised by validators when a check fails."""
 
 
+# Substrate modules use a leaner schema; tier-1/tier-2 modules must carry the
+# full 8-field convention (the three list fields can be empty, but must be present).
 REQUIRED_MODULE_FIELDS = {"id", "name", "tier", "default", "summary"}
+REQUIRED_TIER_MODULE_FIELDS = REQUIRED_MODULE_FIELDS | {
+    "applies_when",
+    "conflicts_with",
+    "requires",
+}
 
 
-def validate_module(path: Path, *, masterbook_root: Path, max_words: int) -> None:
+def validate_module(
+    path: Path,
+    *,
+    masterbook_root: Path,
+    max_words: int,
+    required_fields: set[str] = REQUIRED_MODULE_FIELDS,
+) -> None:
     """Frontmatter parses; required fields present; id matches path; length under budget."""
     try:
         fm, body = parse_frontmatter(path.read_text())
     except FrontmatterError as exc:
         raise ValidationError(f"{path}: {exc}") from exc
 
-    missing = REQUIRED_MODULE_FIELDS - set(fm)
+    missing = required_fields - set(fm)
     if missing:
         raise ValidationError(f"{path}: missing required frontmatter fields: {sorted(missing)}")
 
@@ -47,7 +60,12 @@ def validate_index(masterbook_root: Path) -> None:
         raise ValidationError(f"INDEX.md not found at {index}")
 
     text = index.read_text()
-    referenced = set(m.group(2).removesuffix(".md") for m in _INDEX_LINK_RE.finditer(text))
+    # Strip any `#fragment` (and `?query`) before removing the `.md` suffix, or a
+    # link like `tier-1/foo.md#section` would never match the module id `tier-1/foo`.
+    referenced = set(
+        m.group(2).split("#", 1)[0].split("?", 1)[0].removesuffix(".md")
+        for m in _INDEX_LINK_RE.finditer(text)
+    )
 
     actual: set[str] = set()
     for tier_dir in ("tier-1", "tier-2"):
@@ -174,7 +192,10 @@ def main(argv: list[str] | None = None) -> int:
     for tier_dir in ("tier-1", "tier-2"):
         for p in sorted((root / tier_dir).glob("*.md")):
             try:
-                validate_module(p, masterbook_root=root, max_words=per_module)
+                validate_module(
+                    p, masterbook_root=root, max_words=per_module,
+                    required_fields=REQUIRED_TIER_MODULE_FIELDS,
+                )
             except ValidationError as exc:
                 errors.append(str(exc))
 

@@ -24,6 +24,7 @@ import _paperwork_predicates as pred
 class Failure:
     rule_label: str           # human-readable rule identifier for the report
     reason: str               # one-line failure reason
+    tier: int = 1             # 1 = blocking (default); 2 = deferred/advisory
 
 
 def evaluate_file_rule(
@@ -40,6 +41,7 @@ def evaluate_file_rule(
     if not when_clause_holds(when=rule.get("when"), edit_log=edit_log):
         return []
     pattern = rule["path"]
+    tier = rule.get("tier", 1)
     rule_label = f"[files] {pattern}"
     matches = pred.resolve_glob(project_dir, pattern)
     failures: list[Failure] = []
@@ -48,7 +50,7 @@ def evaluate_file_rule(
     if "must-exist" in rule:
         r = pred.must_exist(matches, expected=rule["must-exist"])
         if not r.passed:
-            failures.append(Failure(rule_label, r.reason))
+            failures.append(Failure(rule_label, r.reason, tier=tier))
             # Cannot run downstream checks on a missing file — return early.
             return failures
 
@@ -61,7 +63,7 @@ def evaluate_file_rule(
             expected=rule["must-be-modified-this-session"],
         )
         if not r.passed:
-            failures.append(Failure(rule_label, r.reason))
+            failures.append(Failure(rule_label, r.reason, tier=tier))
 
     # frontmatter — per match
     if "frontmatter" in rule:
@@ -72,6 +74,7 @@ def evaluate_file_rule(
                 failures.append(Failure(
                     f"[files] {match.relative_to(project_dir)}",
                     f"frontmatter could not be parsed: {exc}",
+                    tier=tier,
                 ))
                 continue
             if fm is None:
@@ -83,6 +86,7 @@ def evaluate_file_rule(
                         failures.append(Failure(
                             f"[files] {match.relative_to(project_dir)}",
                             r.reason,
+                            tier=tier,
                         ))
 
     return failures
@@ -145,6 +149,7 @@ def evaluate_consistency_rule(
     find_pattern = rule["find"]
     src_glob = rule["in"]
     targets = rule["must-also-appear-in"]
+    tier = rule.get("tier", 1)
     rule_label = f"[consistency: {name}]"
 
     failures: list[Failure] = []
@@ -185,6 +190,7 @@ def evaluate_consistency_rule(
                         failures.append(Failure(
                             rule_label,
                             f'"{capture}" found in {src_rel} but missing in any {target}',
+                            tier=tier,
                         ))
                 else:
                     # Single path: capture must appear in that file.
@@ -201,6 +207,7 @@ def evaluate_consistency_rule(
                         failures.append(Failure(
                             rule_label,
                             f'"{capture}" found in {src_rel} but missing in {target}',
+                            tier=tier,
                         ))
     return failures
 
@@ -227,20 +234,41 @@ def run_all(
     return failures
 
 
-def format_report(failures: list[Failure]) -> str:
-    """Render the structured stderr report. Empty list → empty string (no output on pass)."""
-    if not failures:
-        return ""
-    n = len(failures)
-    lines: list[str] = [f"paperwork-enforcement: {n} rule(s) failed.", ""]
-    # Group failures by rule_label, preserving first-seen order.
+def _grouped_body(failures: list[Failure]) -> list[str]:
+    """Group failures by rule_label, preserving first-seen order."""
     by_label: dict[str, list[Failure]] = {}
     for f in failures:
         by_label.setdefault(f.rule_label, []).append(f)
+    lines: list[str] = []
     for label, items in by_label.items():
         lines.append(label)
         for f in items:
             lines.append(f"  ✗ {f.reason}")
         lines.append("")
+    return lines
+
+
+def format_report(failures: list[Failure]) -> str:
+    """Render the blocking (tier-1) stderr report. Empty list → empty string."""
+    if not failures:
+        return ""
+    n = len(failures)
+    lines: list[str] = [f"paperwork-enforcement: {n} rule(s) failed.", ""]
+    lines.extend(_grouped_body(failures))
     lines.append("To unblock: fix each item above, then end the session again.")
+    return "\n".join(lines) + "\n"
+
+
+def format_advisory(failures: list[Failure]) -> str:
+    """Render deferred (tier-2) failures as a non-blocking advisory — surfaced but
+    not held against the session. Empty list → empty string."""
+    if not failures:
+        return ""
+    n = len(failures)
+    lines: list[str] = [
+        f"paperwork-enforcement: {n} deferred (tier-2) item(s) — advisory, not blocking this session.",
+        "",
+    ]
+    lines.extend(_grouped_body(failures))
+    lines.append("These are deferred: address when convenient; they do not block Stop.")
     return "\n".join(lines) + "\n"

@@ -2,6 +2,31 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## v0.1.2 — 2026-06-03
+
+### Added
+- `tier-1/hook-resilience.md` — the hook fail-policy contract: gates fail CLOSED
+  (exit 2) with a reachable bypass on their own code error; recorders fail OPEN
+  (exit 0) and degrade; the exit-code contract (never mix exit-2 with a JSON
+  decision block); the `stop_hook_active` guard.
+- `paperwork.yaml` `tier: 1|2` rule annotation — tier 1 (default) blocks the Stop;
+  tier 2 is surfaced as a non-blocking advisory ("deferred").
+
+### Fixed
+- paperwork-enforcement Stop hook: helper imports are guarded so a broken
+  dependency fails CLOSED (block) instead of exiting 1 (non-blocking = fail-open);
+  reachable `PAPERWORK_ENFORCEMENT_BYPASS` escape hatch checked before any
+  fragile code.
+- `find:` consistency regex is validated at config load (must compile; at most
+  one capturing group).
+- An unclosed frontmatter fence now raises a parse error instead of silently
+  returning `None`.
+- `session_stop_log_timing.py`: `ended_at` is clamped to `>= started_at`
+  (clock-skew guard); the recorder is wrapped to fail open (always exit 0).
+- `tools/validate.py`: strip `#fragment` / `?query` from INDEX links before
+  matching module ids; enforce the full 8-field frontmatter convention for
+  tier-1/tier-2 modules (5-field schema for substrate modules).
+
 ## v0.1.1 — 2026-06-03
 
 ### Fixed

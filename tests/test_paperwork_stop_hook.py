@@ -204,6 +204,100 @@ def test_failing_rules_exit_two_with_report(tmp_path, monkeypatch, capsys):
     assert "fix each item" in err.lower()
 
 
+# ── Fail-policy: gate fails CLOSED on its own code error, with reachable bypass ──
+
+
+def test_import_failure_fails_closed(tmp_path, monkeypatch, capsys):
+    """If the hook's own helper imports fail to load, the gate must BLOCK (exit 2),
+    not wave the Stop through (exit 1 = non-blocking = fail-open). tier-1/hook-resilience."""
+    hook = _load_hook()
+    project = _project_with_inflight_log(tmp_path)
+    _write_config(project, "files:\n  - path: 'sessions/{today}-{session-slug}.md'\n    must-exist: true\n")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.delenv("PAPERWORK_ENFORCEMENT_BYPASS", raising=False)
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    # Simulate a broken dependency (ImportError captured at module load).
+    monkeypatch.setattr(hook, "_IMPORT_ERROR", ImportError("No module named '_paperwork_engine'"))
+    rc = hook.main()
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "PAPERWORK_ENFORCEMENT_BYPASS" in err  # the bypass is advertised
+
+
+def test_bypass_env_exits_zero_even_when_rules_would_block(tmp_path, monkeypatch, capsys):
+    """The reachable bypass lets the operator past a gate (broken or otherwise);
+    it is loud (prints to stderr) and is checked before the fragile code path."""
+    hook = _load_hook()
+    project = _empty_project(tmp_path)
+    # This config blocks normally (rules need session context, no in-flight log).
+    _write_config(project, "files:\n  - path: 'sessions/{today}-{session-slug}.md'\n    must-exist: true\n")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setenv("PAPERWORK_ENFORCEMENT_BYPASS", "1")
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    rc = hook.main()
+    err = capsys.readouterr().err
+    assert rc == 0
+    assert "bypass" in err.lower()
+
+
+def test_bypass_reaches_past_broken_imports(tmp_path, monkeypatch, capsys):
+    """A broken gate must still be bypassable — the bypass is checked before imports
+    are consulted, so it works even when the helpers failed to load."""
+    hook = _load_hook()
+    project = _project_with_inflight_log(tmp_path)
+    _write_config(project, "files:\n  - path: 'sessions/{today}-{session-slug}.md'\n    must-exist: true\n")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setenv("PAPERWORK_ENFORCEMENT_BYPASS", "1")
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    monkeypatch.setattr(hook, "_IMPORT_ERROR", ImportError("boom"))
+    assert hook.main() == 0
+
+
+# ── tier: deferred (tier-2) rules don't block; tier-1 do ──────────────────
+
+
+def test_tier2_only_failure_does_not_block(tmp_path, monkeypatch, capsys):
+    """A failing tier-2 (deferred) rule is surfaced as an advisory but must NOT
+    block the Stop (exit 0)."""
+    hook = _load_hook()
+    project = _project_with_inflight_log(tmp_path)
+    _write_config(project, "files:\n  - path: 'NONEXISTENT.md'\n    must-exist: true\n    tier: 2\n")
+    monkeypatch.setattr(hook, "_today_iso", lambda: _FIXTURE_DATE)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    rc = hook.main()
+    err = capsys.readouterr().err
+    assert rc == 0
+    assert "deferred" in err.lower()
+    assert "NONEXISTENT.md" in err
+
+
+def test_tier1_failure_blocks_even_alongside_tier2(tmp_path, monkeypatch, capsys):
+    """A failing tier-1 rule blocks (exit 2); a tier-2 failure in the same run is
+    still reported, as an advisory."""
+    hook = _load_hook()
+    project = _project_with_inflight_log(tmp_path)
+    _write_config(
+        project,
+        "files:\n"
+        "  - path: 'MISSING_BLOCKING.md'\n"
+        "    must-exist: true\n"
+        "  - path: 'MISSING_DEFERRED.md'\n"
+        "    must-exist: true\n"
+        "    tier: 2\n",
+    )
+    monkeypatch.setattr(hook, "_today_iso", lambda: _FIXTURE_DATE)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    rc = hook.main()
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "MISSING_BLOCKING.md" in err
+    assert "rule(s) failed" in err
+    # The deferred item is still surfaced (advisory section).
+    assert "MISSING_DEFERRED.md" in err
+
+
 # ── --validate-config CLI ────────────────────────────────────────────────
 
 

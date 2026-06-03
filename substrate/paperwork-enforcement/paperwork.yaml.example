@@ -51,6 +51,13 @@ files:
   #   must-exist: true
   #   must-be-modified-this-session: true
 
+  # Example with `tier: 2` — a deferred rule. Tier 1 (the default) blocks the
+  # Stop; tier 2 is surfaced as a non-blocking advisory you can address later.
+  #
+  # - path: "CHANGELOG.md"
+  #   must-be-modified-this-session: true
+  #   tier: 2
+
 # List of consistency rules: cross-document presence checks. For every regex
 # capture from the source file's body (frontmatter is excluded), the literal
 # capture must appear in every listed target.

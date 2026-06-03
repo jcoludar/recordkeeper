@@ -10,6 +10,7 @@ This index is the contract `tools/validate.py` checks: every module listed here 
 ## Tier-1 (always-on modules)
 
 - [File safety](tier-1/file-safety.md) — Read before edit; Know-Check-Overwrite; Edit don't Write on existing docs; versioned writes when uncertain.
+- [Hook resilience](tier-1/hook-resilience.md) — Gates fail closed with a reachable bypass; recorders fail open and degrade. The exit-code contract and the stop_hook_active guard.
 - [Recovery path](tier-1/recovery-path.md) — Every project documents how to undo before it has need of one.
 - [Reproducibility](tier-1/reproducibility.md) — Helpers as `.py` files; absolute paths; venv-pinned Python; no inline scripting in chat or shell.
 - [Scope and boundaries](tier-1/scope-and-boundaries.md) — Stay inside the project working tree. Ask before touching source-of-truth files in shared locations.

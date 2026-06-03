@@ -50,7 +50,8 @@ consistency:                     # list of cross-document rules
 - `must-be-modified-this-session: <bool>` — matched file(s) appear in this session's edit log.
 - `frontmatter.<field>: {required, equals, in, matches}` — field-by-field assertions.
 - `when.when-files-modified-matching: <glob>` — gate a file rule on edit-log activity.
-- `consistency` — for each regex capture in source body, the literal capture must appear in every listed target file (or in at least one match of a glob target).
+- `tier: <1|2>` — rule severity, on any file or consistency rule. Tier 1 (default) blocks the Stop; tier 2 is surfaced as a non-blocking advisory ("deferred"). Lets a project distinguish "must fix before next session" from "track but don't block".
+- `consistency` — for each regex capture in source body, the literal capture must appear in every listed target file (or in at least one match of a glob target). The `find:` regex is validated at config load (must compile; at most one capturing group).
 
 See `paperwork.yaml.example` shipped with this substrate for a fully-annotated template.
 
@@ -62,7 +63,7 @@ Every Stop event:
 3. Interpolate `{today}` / `{session-slug}` in the config.
 4. Filter the edit log to the current session via `started_at`.
 5. Walk every `files:` and `consistency:` rule; collect every failure.
-6. Exit 0 silent on pass; exit 2 with `paperwork-enforcement: N rule(s) failed.` + grouped reasons on fail.
+6. Exit 0 silent on pass. Any tier-1 failure → exit 2 with `paperwork-enforcement: N rule(s) failed.` + grouped reasons. Tier-2-only failures → exit 0 with a non-blocking advisory.
 
 Failed Stop blocks the session from ending. Fix each item, end session again — fresh evaluation, no cached state.
 
