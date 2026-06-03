@@ -76,7 +76,11 @@ def main() -> int:
     except Exception:
         session_log_dir = "sessions"
     sessions_dir = project_dir / session_log_dir
-    inflight = sl.find_in_flight_log(sessions_dir)
+    # Resolve the SAME in-flight log the Stop hook will (it passes today). Without
+    # today, find_in_flight_log falls back to "most-recent open log across all
+    # dates", which mis-keys edits when stale never-closed logs exist — the Stop
+    # hook then can't match this session's started_at and must-be-modified fails.
+    inflight = sl.find_in_flight_log(sessions_dir, today=dt.date.today().isoformat())
     if inflight is None:
         return 0  # silent no-op
 

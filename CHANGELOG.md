@@ -2,6 +2,15 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## v0.1.1 — 2026-06-03
+
+### Fixed
+- PostToolUse edit recorder now resolves the **same** in-flight session log as the
+  blocking Stop hook (it passes `today`). Previously the recorder called
+  `find_in_flight_log` without `today`, falling back to "most-recent open log
+  across all dates" — so with stale, never-closed session logs present it keyed
+  edits to the wrong session and `must-be-modified-this-session` could never pass.
+
 ## v0.1.0 — first public release (2026-06-03)
 
 Initial public extraction from the masterbook substrate library.

@@ -165,3 +165,41 @@ def test_ts_is_iso_with_offset(tmp_path, monkeypatch):
     log_file = project / ".claude" / "state" / "paperwork-edit-log.jsonl"
     entry = json.loads(log_file.read_text().strip())
     assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$", entry["ts"])
+
+
+def test_records_against_todays_log_not_a_newer_stale_open_log(tmp_path, monkeypatch):
+    """When a stale never-closed log from another day has a NEWER mtime than
+    today's in-flight log, the recorder must still key the edit to TODAY's session
+    — matching the Stop hook (which passes today). Otherwise the two hooks resolve
+    different logs and `must-be-modified-this-session` falsely fails."""
+    import datetime as _dt
+    import os
+
+    hook = _load_hook()
+    project = tmp_path / "proj"
+    project.mkdir()
+    sessions = project / "sessions"
+    sessions.mkdir()
+    today = _dt.date.today().isoformat()
+    today_started = f"{today}T09:00:00+02:00"
+    today_log = sessions / f"{today}-current.md"
+    today_log.write_text(
+        f"---\ndate: {today}\nstarted_at: {today_started}\nslug: current\n---\n\nbody\n"
+    )
+    stale = sessions / "2026-05-13-stale.md"
+    stale.write_text(
+        "---\ndate: 2026-05-13\nstarted_at: 2026-05-13T08:00:00+02:00\nslug: stale\n---\n\nbody\n"
+    )
+    # Make the stale log the most-recently-modified, defeating any mtime fallback.
+    bump = today_log.stat().st_mtime + 100
+    os.utime(stale, (bump, bump))
+
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    envelope = {"tool_name": "Edit", "tool_input": {"file_path": str(today_log)}}
+    monkeypatch.setattr("sys.stdin", StringIO(json.dumps(envelope)))
+    assert hook.main() == 0
+
+    log_file = project / ".claude" / "state" / "paperwork-edit-log.jsonl"
+    entry = json.loads(log_file.read_text().strip())
+    assert entry["started_at"] == today_started  # today's session, not the newer stale one
+    assert entry["path"] == f"sessions/{today}-current.md"
