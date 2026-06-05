@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "owner": { "name": "Joha Coludar", "url": "https://github.com/jcoludar" },
+  "plugins": [
+    { "name": "recordkeeper", "source": "." }
+  ]
+}
