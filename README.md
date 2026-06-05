@@ -1,5 +1,13 @@
 # recordkeeper
 
+**Effortless session record-keeping for Claude Code: orient at the start, run a
+checklist at the end, get accurate end-times — and it can _never_ refuse to let
+you stop.**
+
+Most Claude Code add-ons give the model more capability. recordkeeper gives it
+*memory and discipline*: every working session leaves a dated log with reliable
+timestamps, written without you having to think about it.
+
 ## Install (Claude Code plugin)
 
 ```bash
@@ -7,39 +15,52 @@
 /plugin install recordkeeper
 ```
 
-You immediately get the **core**: `/begin-session`, `/debrief`, and automatic
-`ended_at:` stamping on `SessionEnd`. The core is **non-blocking — it can never
-refuse to let you stop.** Stronger features (blocking enforcement, manifest,
-guard dials, sentinels, multi-session orchestration) are opt-in layers added in
-later releases.
+That's the supported path. You immediately get the **core**:
 
-> The assembler-style substrate layout in this repo (`substrate/`, `tools/`) is
-> the legacy distribution and remains for now; the plugin above is the supported
-> path going forward.
+- **`/begin-session`** — orient against your priorities and the previous session,
+  then write a new session log with `started_at:` filled in.
+- **`/debrief`** — walk the end-of-session checklist (status, follow-ups, blockers)
+  before you stop.
+- **Automatic `ended_at:` stamping on `SessionEnd`** — a non-blocking hook writes the
+  real end-time into the in-flight log when the session closes, so end-times never
+  drift the way they do when the model writes them by hand.
 
-**Blocking Stop hooks for Claude Code — refuse to end a session until your project's
-session logs, frontmatter, and cross-doc invariants check out.**
+The core is **non-blocking by construction — it can never refuse to let you stop.**
+It has zero blocking exit paths; the worst it can do on a bad day is fail open and
+write nothing.
 
-Most Claude Code add-ons give the model more capability. recordkeeper does the
-opposite: it tells the model *no*. A declarative `paperwork.yaml` describes what
-your project requires before a session can end — a session log at the expected
-path, specific frontmatter fields, edits reflected in changelogs, findings that
-appear in both the session log and the tracking doc. When the model tries to stop
-with rules unsatisfied, the Stop hook exits non-zero and the session can't close.
-The model fixes its paperwork, then ends.
+## What makes the core different
 
-The rule engine is the headline, but the unit of reuse is the **substrate** — a
-self-contained bundle of slash commands, hooks, and config fragments that drop
-into any project. v0 ships two: session paperwork (start/end discipline) and
-paperwork enforcement (the rule engine). An assembler composes the substrates you
-pick into a single `CLAUDE.md` plus a populated `.claude/` directory. One build
-step, no runtime dependency on this repo after install.
+- **It records, it doesn't gate.** Most ecosystem Stop / SessionEnd hooks
+  auto-checkpoint or summarize. recordkeeper's core simply guarantees an accurate,
+  honestly-timestamped session log — and otherwise stays out of your way.
+- **Timestamps you can trust.** `started_at:` is written when you begin;
+  `ended_at:` is stamped by the harness at `SessionEnd`, not guessed by the model
+  after the fact.
+- **No runtime dependency.** Python + PyYAML, no npm, no service to run.
 
-Five-minute install, MIT, Python + PyYAML, no npm. Read [`PARKING_LOT.md`](./PARKING_LOT.md)
-first if you're authoring your own hooks — it documents hard-won Anthropic
-hook-contract gotchas plus other substrate-engineering lessons the docs don't.
+## Legacy: the assembler & blocking enforcement (opt-in)
 
-## Quickstart
+Before the plugin, recordkeeper shipped as an **assembler**: `tools/assemble.py`
+composes self-contained *substrates* — bundles of slash commands, hooks, and
+config fragments — into a project's `CLAUDE.md` and `.claude/` directory. One build
+step, no runtime dependency on this repo afterward. That distribution remains for
+now, and it's where the **blocking** behavior lives.
+
+> **Blocking Stop hooks — refuse to end a session until your project's session
+> logs, frontmatter, and cross-doc invariants check out.** A declarative
+> `paperwork.yaml` describes what a project requires before a session can end — a
+> session log at the expected path, specific frontmatter fields, edits reflected in
+> changelogs, findings that appear in both the session log and the tracking doc.
+> When the model tries to stop with rules unsatisfied, the Stop hook exits non-zero
+> and the session can't close. The model fixes its paperwork, then ends.
+
+This is the opposite of the plugin core's promise, and that's deliberate: it's an
+**opt-in** layer for projects that have committed to a paperwork contract and want
+it machine-enforced. The plugin core never blocks; the enforcement substrate is for
+teams who explicitly want a gate.
+
+### Assembler quickstart
 
 ```bash
 git clone https://github.com/jcoludar/recordkeeper.git ~/code/recordkeeper
@@ -50,30 +71,27 @@ cd ~/my-claude-project
 python ~/code/recordkeeper/tools/assemble.py ~/code/recordkeeper .
 ```
 
-Start a Claude Code session in `~/my-claude-project`. Try to end it without
-writing a session log → the Stop hook blocks. Done.
+Start a Claude Code session in `~/my-claude-project`, try to end it without writing
+a session log → the Stop hook blocks. Done.
 
-## What's in the box
+### Substrates in the box
 
-- **`substrate/session-paperwork/`** — `/begin-session` and `/debrief` slash
-  commands, session log template, non-blocking Stop hook that fills `ended_at:`
+- **`substrate/session-paperwork/`** — `/begin-session` and `/debrief`, the
+  session-log template, and a *non-blocking* Stop hook that fills `ended_at:`
   automatically.
-- **`substrate/paperwork-enforcement/`** — blocking Stop hook driven by a
-  declarative `paperwork.yaml`. Predicates: file existence, frontmatter
-  validation, edit-log filtering, cross-document consistency.
+- **`substrate/paperwork-enforcement/`** — the *blocking* Stop hook driven by a
+  declarative `paperwork.yaml`. Predicates: file existence, frontmatter validation,
+  edit-log filtering, cross-document consistency.
 - **`tools/assemble.py`** — composes selected substrates into a project's
-  `CLAUDE.md` and `.claude/` directory. Takes two positional args: the
-  recordkeeper repo root and the target project directory.
+  `CLAUDE.md` and `.claude/`. Takes two positional args: the recordkeeper repo root
+  and the target project directory.
 
-## What makes this different
+Richer plugin-native layers (blocking enforcement, a session manifest, guard dials,
+human-only sentinels, multi-session orchestration) are planned for later releases.
 
-- **Declarative paperwork rules in YAML, not procedural JS.** Rules read as
-  contracts, not as scripts.
-- **Stop hooks that gate state, not just save it.** Most ecosystem Stop hooks
-  auto-checkpoint or summarize. This one refuses to end the session.
-- **Substrate composition through a build system.** Project conventions
-  compose; you pick the substrates you want and the assembler produces a
-  single `CLAUDE.md` + populated `.claude/`.
+If you're authoring your own hooks, read [`PARKING_LOT.md`](./PARKING_LOT.md) first —
+it documents hard-won Anthropic hook-contract gotchas plus other
+substrate-engineering lessons the docs don't.
 
 ## Prior art
 
