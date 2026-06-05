@@ -5,6 +5,6 @@
   "author": { "name": "Joha Coludar", "email": "jcoludar@gmail.com" },
   "license": "MIT",
   "homepage": "https://github.com/jcoludar/recordkeeper",
-  "repository": { "type": "git", "url": "https://github.com/jcoludar/recordkeeper" },
+  "repository": "https://github.com/jcoludar/recordkeeper",
   "keywords": ["session", "logging", "record-keeping", "productivity"]
 }

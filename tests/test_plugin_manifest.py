@@ -14,7 +14,7 @@ def test_plugin_manifest_required_fields():
 
 def test_marketplace_lists_recordkeeper():
     mkt = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text())
-    assert mkt["version"] == 1
+    assert mkt["name"] == "recordkeeper"
     names = [p["name"] for p in mkt["plugins"]]
     assert "recordkeeper" in names
     assert all(p.get("source") for p in mkt["plugins"])

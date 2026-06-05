@@ -1,5 +1,6 @@
 {
-  "version": 1,
+  "name": "recordkeeper",
+  "description": "Joha Coludar's marketplace for the recordkeeper Claude Code plugin.",
   "owner": { "name": "Joha Coludar", "url": "https://github.com/jcoludar" },
   "plugins": [
     { "name": "recordkeeper", "source": "." }
