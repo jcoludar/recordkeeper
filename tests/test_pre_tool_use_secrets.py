@@ -3,7 +3,7 @@ import json
 import subprocess
 from pathlib import Path
 
-HOOK = Path(__file__).resolve().parent.parent / "hooks" / "pre_tool_use_secrets.py"
+HOOK = Path(__file__).resolve().parent.parent / "baseline-hooks" / "pre_tool_use_secrets.py"
 
 
 def _run(payload: dict) -> subprocess.CompletedProcess:

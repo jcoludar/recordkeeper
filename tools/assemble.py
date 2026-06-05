@@ -333,11 +333,16 @@ def deploy_hooks(
 ) -> list[Path]:
     """Copy baseline + selected-substrate hook .py files into <project>/.claude/hooks/.
 
+    Baseline hooks live in `baseline-hooks/` (always-on, deployed to every project).
+    The repo-root `hooks/` directory is the Claude Code *plugin's* hook surface
+    (hooks.json + session_end_stamp.py) and is intentionally NOT deployed by the
+    assembler — the plugin and the assembler are two separate distribution paths.
+
     Returns the list of deployed destination paths.
     Raises RuntimeError on filename collision between any two sources.
     """
     src_paths: list[Path] = []
-    baseline_dir = masterbook_root / "hooks"
+    baseline_dir = masterbook_root / "baseline-hooks"
     if baseline_dir.is_dir():
         src_paths.extend(sorted(baseline_dir.glob("*.py")))
     for name in substrates:

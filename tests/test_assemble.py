@@ -480,8 +480,8 @@ from assemble import deploy_hooks
 
 
 def test_deploy_hooks_copies_baseline(mini_masterbook, tmp_path):
-    """All .py in masterbook/hooks/ get copied to project/.claude/hooks/."""
-    hooks_src = mini_masterbook / "hooks"
+    """All .py in masterbook/baseline-hooks/ get copied to project/.claude/hooks/."""
+    hooks_src = mini_masterbook / "baseline-hooks"
     hooks_src.mkdir(exist_ok=True)
     (hooks_src / "a.py").write_text("print('a')\n")
     (hooks_src / "b.py").write_text("print('b')\n")
@@ -517,8 +517,8 @@ def test_deploy_hooks_skips_substrate_when_not_listed(mini_masterbook, tmp_path)
 
 def test_deploy_hooks_collision_raises(mini_masterbook, tmp_path):
     """Filename collision between baseline and substrate raises RuntimeError."""
-    (mini_masterbook / "hooks").mkdir(exist_ok=True)
-    (mini_masterbook / "hooks" / "dup.py").write_text("print('a')\n")
+    (mini_masterbook / "baseline-hooks").mkdir(exist_ok=True)
+    (mini_masterbook / "baseline-hooks" / "dup.py").write_text("print('a')\n")
     sub_hooks = mini_masterbook / "substrate" / "demo" / "hooks"
     sub_hooks.mkdir(parents=True)
     (sub_hooks / "dup.py").write_text("print('b')\n")
@@ -537,7 +537,7 @@ def test_deploy_hooks_makes_hooks_executable_from_nonexec_source(mini_masterbook
     assembler must set +x on deploy regardless of the source's mode.
     """
     import os, stat
-    hooks_src = mini_masterbook / "hooks"
+    hooks_src = mini_masterbook / "baseline-hooks"
     hooks_src.mkdir(exist_ok=True)
     src = hooks_src / "exe.py"
     src.write_text("#!/usr/bin/env python3\nprint('x')\n")

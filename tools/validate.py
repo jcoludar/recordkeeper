@@ -107,11 +107,16 @@ def validate_settings_fragments(masterbook_root: Path) -> None:
 
 
 def validate_hooks(masterbook_root: Path) -> None:
-    """Each .py file under hooks/ and substrate/*/hooks/ parses with `ast.parse`."""
+    """Each .py file under baseline-hooks/, hooks/, and substrate/*/hooks/ parses with `ast.parse`.
+
+    `baseline-hooks/` is the assembler's always-on hook source; `hooks/` is the
+    Claude Code plugin's hook surface. Both are syntax-checked.
+    """
     candidates: list[Path] = []
-    hooks_dir = masterbook_root / "hooks"
-    if hooks_dir.is_dir():
-        candidates.extend(hooks_dir.glob("*.py"))
+    for top in ("baseline-hooks", "hooks"):
+        hooks_dir = masterbook_root / top
+        if hooks_dir.is_dir():
+            candidates.extend(hooks_dir.glob("*.py"))
     substrate_root = masterbook_root / "substrate"
     if substrate_root.is_dir():
         for sub_dir in substrate_root.iterdir():

@@ -5,7 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 
-HOOK = Path(__file__).resolve().parent.parent / "hooks" / "stop_session_log.py"
+HOOK = Path(__file__).resolve().parent.parent / "baseline-hooks" / "stop_session_log.py"
 
 
 def _run(payload: dict, project_root: Path) -> subprocess.CompletedProcess:

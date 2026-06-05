@@ -6,6 +6,7 @@ from pathlib import Path
 MASTERBOOK = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(MASTERBOOK / "tools"))
 sys.path.insert(0, str(MASTERBOOK / "hooks"))
+sys.path.insert(0, str(MASTERBOOK / "baseline-hooks"))
 
 import pytest
 
