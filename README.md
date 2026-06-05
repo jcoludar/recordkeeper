@@ -1,5 +1,22 @@
 # recordkeeper
 
+## Install (Claude Code plugin)
+
+```bash
+/plugin marketplace add github:jcoludar/recordkeeper
+/plugin install recordkeeper
+```
+
+You immediately get the **core**: `/begin-session`, `/debrief`, and automatic
+`ended_at:` stamping on `SessionEnd`. The core is **non-blocking — it can never
+refuse to let you stop.** Stronger features (blocking enforcement, manifest,
+guard dials, sentinels, multi-session orchestration) are opt-in layers added in
+later releases.
+
+> The assembler-style substrate layout in this repo (`substrate/`, `tools/`) is
+> the legacy distribution and remains for now; the plugin above is the supported
+> path going forward.
+
 **Blocking Stop hooks for Claude Code — refuse to end a session until your project's
 session logs, frontmatter, and cross-doc invariants check out.**
 
