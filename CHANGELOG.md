@@ -2,6 +2,29 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## v0.2.1 — 2026-06-11
+
+### Added
+- `substrate/session-manifest/` — a new opt-in substrate (`requires: session-paperwork`)
+  that gives a project a machine-trustworthy session lifecycle: an authoritative
+  in-flight pointer (`.claude/state/session-manifest/in-flight.json`), a monotonic
+  `session_no`, a generated `sessions/INDEX.md`, and unclosed ("ghost") sessions
+  surfaced — without giving up hand-editable logs. A non-blocking Stop hook
+  (`manifest_stop_update.py`, a recorder that fails open) owns all machine state and
+  refreshes it every turn; the helpers (`_manifest_atomic.py`, `_manifest_pointer.py`,
+  `_manifest_index.py`) are stdlib-only.
+
+### Changed
+- `session-paperwork` and `paperwork-enforcement` `find_in_flight_log` are now
+  **pointer-aware**: when the session-manifest in-flight pointer names a valid in-flight
+  log, it is preferred over the most-recent-mtime heuristic (killing the stale-log
+  fragility where an old never-closed log wins the race). Fully backward-compatible —
+  no pointer file means byte-identical behavior to before.
+- `session_stop_log_timing.py` now stamps `ended_at` **only on `status: done`**
+  (premature-finalization protection): a Stop is a turn boundary, not a session end, so a
+  mid-session pause no longer records a wrong end time. The session ends only at an
+  explicit `/debrief` close.
+
 ## v0.2.0 — 2026-06-11
 
 recordkeeper now installs as a **Claude Code plugin**. The non-blocking session

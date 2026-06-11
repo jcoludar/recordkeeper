@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/env python3 $CLAUDE_PROJECT_DIR/.claude/hooks/manifest_stop_update.py"
+          }
+        ]
+      }
+    ]
+  }
+}

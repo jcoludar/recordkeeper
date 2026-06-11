@@ -236,7 +236,7 @@ def test_main_writes_ended_at_on_in_flight(tmp_path, monkeypatch, capsys):
         "date: 2026-05-12\n"
         "started_at: 2026-05-12T08:00:00+02:00\n"
         "slug: foo\n"
-        "status: in_progress\n"
+        "status: done\n"
         "---\n\n"
         "# Body\n"
     )
@@ -261,6 +261,7 @@ def test_main_idempotent(tmp_path, monkeypatch):
         "date: 2026-05-12\n"
         "started_at: 2026-05-12T08:00:00+02:00\n"
         "slug: foo\n"
+        "status: done\n"
         "---\n\n"
         "# Body\n"
     )
@@ -306,7 +307,7 @@ def test_main_clamps_ended_at_to_started_when_clock_skewed(tmp_path, monkeypatch
     started = "2026-05-12T10:00:00+02:00"
     log = sessions / "2026-05-12-foo.md"
     log.write_text(
-        f"---\ndate: 2026-05-12\nstarted_at: {started}\nslug: foo\n---\n\n# Body\n"
+        f"---\ndate: 2026-05-12\nstarted_at: {started}\nslug: foo\nstatus: done\n---\n\n# Body\n"
     )
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
     # now() reports a time *before* the session started (clock skew).
@@ -324,7 +325,7 @@ def test_main_fails_open_on_internal_error(tmp_path, monkeypatch, capsys):
     sessions.mkdir()
     log = sessions / "2026-05-12-foo.md"
     log.write_text(
-        "---\ndate: 2026-05-12\nstarted_at: 2026-05-12T08:00:00+02:00\nslug: foo\n---\n\n# Body\n"
+        "---\ndate: 2026-05-12\nstarted_at: 2026-05-12T08:00:00+02:00\nslug: foo\nstatus: done\n---\n\n# Body\n"
     )
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
 
@@ -345,10 +346,10 @@ def test_main_multiple_in_flight_picks_newest(tmp_path, monkeypatch):
     older = sessions / "older.md"
     newer = sessions / "newer.md"
     older.write_text(
-        "---\ndate: 2026-05-12\nstarted_at: 2026-05-12T08:00:00+02:00\n---\n\nBody.\n"
+        "---\ndate: 2026-05-12\nstarted_at: 2026-05-12T08:00:00+02:00\nstatus: done\n---\n\nBody.\n"
     )
     newer.write_text(
-        "---\ndate: 2026-05-12\nstarted_at: 2026-05-12T10:00:00+02:00\n---\n\nBody.\n"
+        "---\ndate: 2026-05-12\nstarted_at: 2026-05-12T10:00:00+02:00\nstatus: done\n---\n\nBody.\n"
     )
     import os
     now = dt.datetime.now().timestamp()
@@ -358,3 +359,55 @@ def test_main_multiple_in_flight_picks_newest(tmp_path, monkeypatch):
     hook.main()
     assert "ended_at: " in newer.read_text()
     assert "ended_at: " not in older.read_text()
+
+
+def test_find_in_flight_prefers_pointer(tmp_path, monkeypatch):
+    hook = _load_hook()
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    # An OLDER stale open log with NEWER mtime would normally win the mtime race.
+    stale = sessions / "2026-05-01-stale.md"
+    stale.write_text("---\ndate: 2026-05-01\nstarted_at: 2026-05-01T08:00:00+02:00\nslug: stale\nstatus: in_progress\n---\n\nbody\n")
+    current = sessions / "2026-06-03-cur.md"
+    current.write_text("---\ndate: 2026-06-03\nstarted_at: 2026-06-03T08:00:00+02:00\nslug: cur\nstatus: in_progress\n---\n\nbody\n")
+    import os, datetime as dt
+    now = dt.datetime.now().timestamp()
+    os.utime(current, (now - 5000, now - 5000))   # current is OLDER by mtime
+    os.utime(stale, (now, now))                    # stale is NEWER by mtime
+    # Pointer names the current log.
+    ptr = tmp_path / ".claude" / "state" / "session-manifest" / "in-flight.json"
+    ptr.parent.mkdir(parents=True)
+    ptr.write_text('{"log": "sessions/2026-06-03-cur.md", "slug": "cur", "started_at": "2026-06-03T08:00:00+02:00"}')
+    result = hook.find_in_flight_log(sessions)
+    assert result is not None and result.name == "2026-06-03-cur.md"
+
+
+def test_find_in_flight_falls_back_without_pointer(tmp_path):
+    hook = _load_hook()
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    (sessions / "open.md").write_text("---\ndate: 2026-06-03\nstarted_at: 2026-06-03T08:00:00+02:00\nslug: open\n---\n\nbody\n")
+    # No pointer file → unchanged mtime behavior.
+    assert hook.find_in_flight_log(sessions).name == "open.md"
+
+
+def test_main_skips_ended_at_when_not_done(tmp_path, monkeypatch):
+    hook = _load_hook()
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    log = sessions / "2026-06-03-p.md"
+    log.write_text("---\ndate: 2026-06-03\nstarted_at: 2026-06-03T08:00:00+02:00\nslug: p\nstatus: paused\n---\n\nbody\n")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    assert hook.main() == 0
+    assert "ended_at: " not in log.read_text()  # paused → no premature stamp
+
+
+def test_main_stamps_ended_at_when_done(tmp_path, monkeypatch):
+    hook = _load_hook()
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    log = sessions / "2026-06-03-d.md"
+    log.write_text("---\ndate: 2026-06-03\nstarted_at: 2026-06-03T08:00:00+02:00\nslug: d\nstatus: done\n---\n\nbody\n")
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tmp_path))
+    assert hook.main() == 0
+    assert "ended_at: " in log.read_text()

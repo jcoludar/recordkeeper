@@ -6,6 +6,7 @@ paperwork-enforcement Stop hook to scope edits and resolve {session-slug}.
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -65,6 +66,26 @@ def parse_started_at_and_slug(text: str) -> tuple[str | None, str | None]:
     return (started_at, slug)
 
 
+def _pointer_inflight(sessions_dir: Path) -> Path | None:
+    """Prefer the session-manifest in-flight pointer when present and valid."""
+    project_dir = sessions_dir.parent
+    ptr = project_dir / ".claude" / "state" / "session-manifest" / "in-flight.json"
+    try:
+        data = json.loads(ptr.read_text())
+    except (OSError, ValueError):
+        return None
+    log = data.get("log") if isinstance(data, dict) else None
+    if not log:
+        return None
+    cand = project_dir / log
+    try:
+        if cand.is_file() and cand.parent == sessions_dir and not has_ended_at(cand.read_text()):
+            return cand
+    except OSError:
+        return None
+    return None
+
+
 def find_in_flight_log(sessions_dir: Path, today: str | None = None) -> Path | None:
     """Return the session log for the current Stop event.
 
@@ -87,6 +108,9 @@ def find_in_flight_log(sessions_dir: Path, today: str | None = None) -> Path | N
     """
     if not sessions_dir.is_dir():
         return None
+    pointed = _pointer_inflight(sessions_dir)
+    if pointed is not None:
+        return pointed
     today_open: list[Path] = []
     today_any: list[Path] = []
     other_open: list[Path] = []

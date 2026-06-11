@@ -13,6 +13,7 @@ log, prints a stderr warning and exits 0. The next /debrief surfaces the gap.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import re
 import sys
@@ -88,6 +89,37 @@ def clamp_ended_at(ended: str, started: str | None) -> str:
     return ended
 
 
+_STATUS_RE = re.compile(r"^status:\s*(\S+)", re.MULTILINE)
+
+
+def _status_value(text: str) -> str | None:
+    fm = _frontmatter_region(text)
+    if fm is None:
+        return None
+    m = _STATUS_RE.search(fm)
+    return m.group(1) if m else None
+
+
+def _pointer_inflight(sessions_dir: Path) -> Path | None:
+    """Prefer the session-manifest in-flight pointer when present and valid."""
+    project_dir = sessions_dir.parent
+    ptr = project_dir / ".claude" / "state" / "session-manifest" / "in-flight.json"
+    try:
+        data = json.loads(ptr.read_text())
+    except (OSError, ValueError):
+        return None
+    log = data.get("log") if isinstance(data, dict) else None
+    if not log:
+        return None
+    cand = project_dir / log
+    try:
+        if cand.is_file() and cand.parent == sessions_dir and not _has_ended_at(cand.read_text()):
+            return cand
+    except OSError:
+        return None
+    return None
+
+
 def find_in_flight_log(sessions_dir: Path) -> Path | None:
     """Return the most-recently-mtime'd .md under sessions_dir whose frontmatter
     lacks `ended_at:`. Returns None if directory is missing or no candidates.
@@ -96,6 +128,9 @@ def find_in_flight_log(sessions_dir: Path) -> Path | None:
     """
     if not sessions_dir.is_dir():
         return None
+    pointed = _pointer_inflight(sessions_dir)
+    if pointed is not None:
+        return pointed
     candidates: list[Path] = []
     for path in sessions_dir.glob("*.md"):
         try:
@@ -135,6 +170,12 @@ def main() -> int:
             )
             return 0
         text = path.read_text()
+        if _status_value(text) != "done":
+            print(
+                f"session_stop_log_timing: {path.name} status is not 'done'; not stamping ended_at",
+                file=sys.stderr,
+            )
+            return 0
         timestamp = clamp_ended_at(now_iso(), _started_at_value(text))
         new_text = insert_ended_at(text, timestamp)
         path.write_text(new_text)

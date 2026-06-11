@@ -130,3 +130,33 @@ def test_find_in_flight_log_skips_files_without_frontmatter(tmp_path):
     bad = sessions / "no-frontmatter.md"
     bad.write_text("Just a body, no frontmatter.\n")
     assert sl.find_in_flight_log(sessions) is None
+
+
+def test_find_in_flight_prefers_pointer(tmp_path):
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    # Two today-dated open logs land in the SAME tier (today_open); mtime would pick
+    # the stale one. Only the pointer can override to the real current session.
+    stale = sessions / "2026-06-03-stale.md"
+    stale.write_text("---\ndate: 2026-06-03\nstarted_at: 2026-06-03T07:00:00+02:00\nslug: stale\nstatus: in_progress\n---\n\nx\n")
+    cur = sessions / "2026-06-03-cur.md"
+    cur.write_text("---\ndate: 2026-06-03\nstarted_at: 2026-06-03T08:00:00+02:00\nslug: cur\nstatus: in_progress\n---\n\nx\n")
+    import os, datetime as dt
+    now = dt.datetime.now().timestamp()
+    os.utime(cur, (now - 5000, now - 5000))   # cur is OLDER by mtime
+    os.utime(stale, (now, now))                # stale is NEWER by mtime → wins the tier without pointer
+    ptr = tmp_path / ".claude" / "state" / "session-manifest" / "in-flight.json"
+    ptr.parent.mkdir(parents=True)
+    ptr.write_text('{"log": "sessions/2026-06-03-cur.md", "slug": "cur", "started_at": "2026-06-03T08:00:00+02:00"}')
+    result = sl.find_in_flight_log(sessions, today="2026-06-03")
+    assert result is not None and result.name == "2026-06-03-cur.md"
+
+
+def test_find_in_flight_falls_back_without_pointer(tmp_path):
+    # No pointer file → unchanged tiered behavior (today's open log wins).
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    cur = sessions / "2026-06-03-cur.md"
+    cur.write_text("---\ndate: 2026-06-03\nstarted_at: 2026-06-03T08:00:00+02:00\nslug: cur\nstatus: in_progress\n---\n\nx\n")
+    result = sl.find_in_flight_log(sessions, today="2026-06-03")
+    assert result is not None and result.name == "2026-06-03-cur.md"

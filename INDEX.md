@@ -6,6 +6,7 @@ This index is the contract `tools/validate.py` checks: every module listed here 
 
 - `substrate/session-paperwork/` — start/end session paperwork primitives.
 - `substrate/paperwork-enforcement/` — blocking Stop hook + declarative `paperwork.yaml` rule engine.
+- `substrate/session-manifest/` — machine-trustworthy session lifecycle over session-paperwork: authoritative in-flight pointer, monotonic `session_no`, generated `sessions/INDEX.md`, ghost surfacing.
 
 ## Tier-1 (always-on modules)
 

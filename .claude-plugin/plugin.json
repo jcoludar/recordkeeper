@@ -1,7 +1,7 @@
 {
   "name": "recordkeeper",
   "description": "Effortless session record-keeping for Claude Code: orient at start, checklist at end, accurate end-times — and it can never refuse to let you stop.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": { "name": "Joha Coludar", "email": "jcoludar@gmail.com" },
   "license": "MIT",
   "homepage": "https://github.com/jcoludar/recordkeeper",
