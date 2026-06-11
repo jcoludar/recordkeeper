@@ -2,6 +2,33 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## v0.2.0 — 2026-06-11
+
+recordkeeper now installs as a **Claude Code plugin**. The non-blocking session
+record-keeper — orient at the start, run the closing checklist at the end, and get
+accurate end-times written automatically — is the headline path; the blocking
+paperwork-enforcement layer is reframed as legacy/opt-in.
+
+### Added
+- Plugin packaging: a `.claude-plugin/` manifest + marketplace entry, installable via
+  `/plugin marketplace add github:jcoludar/recordkeeper`.
+- `/begin-session` and `/debrief` commands ported into the plugin.
+- A `SessionEnd` `ended_at` stamper — non-binding, fail-open, stdin/cwd-aware,
+  registered via `hooks.json` — that writes the real end time when a session ends.
+
+### Changed
+- README leads with the non-blocking plugin; the blocking enforcement layer is
+  presented as legacy/opt-in.
+- The plugin's hook directory is separated from the assembler's baseline hooks.
+
+### Fixed
+- Plugin manifests conformed to the Claude Code plugin schema (a live install-smoke
+  caught a dead-on-install manifest bug).
+
+### Tests
+- End-to-end `SessionEnd` stamp exercised via subprocess + stdin; a guard against
+  bare-path hook invocations (exit-126 regression).
+
 ## v0.1.2 — 2026-06-03
 
 ### Added
