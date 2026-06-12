@@ -1,12 +1,13 @@
 # recordkeeper
 
-**Effortless session record-keeping for Claude Code: orient at the start, run a
-checklist at the end, get accurate end-times — and it can _never_ refuse to let
-you stop.**
+**Honest session records for Claude Code: orient at the start, run a checklist at
+the end, get end-times you can trust. It records by default — and enforces the moment
+you ask it to.**
 
 Most Claude Code add-ons give the model more capability. recordkeeper gives it
 *memory and discipline*: every working session leaves a dated log with reliable
-timestamps, written without you having to think about it.
+timestamps, written without you having to think about it — and, when a project wants
+it, paperwork a session literally cannot close without.
 
 ## Install (Claude Code plugin)
 
@@ -39,26 +40,31 @@ write nothing.
   after the fact.
 - **No runtime dependency.** Python + PyYAML, no npm, no service to run.
 
-## Legacy: the assembler & blocking enforcement (opt-in)
+## Turn it up: blocking enforcement (opt-in)
 
-Before the plugin, recordkeeper shipped as an **assembler**: `tools/assemble.py`
-composes self-contained *substrates* — bundles of slash commands, hooks, and
-config fragments — into a project's `CLAUDE.md` and `.claude/` directory. One build
-step, no runtime dependency on this repo afterward. That distribution remains for
-now, and it's where the **blocking** behavior lives.
+The core records. When a project is ready to go further, recordkeeper can **hold the
+line** — a blocking Stop hook that refuses to end a session until the project's
+session logs, frontmatter, and cross-doc invariants check out.
 
-> **Blocking Stop hooks — refuse to end a session until your project's session
-> logs, frontmatter, and cross-doc invariants check out.** A declarative
-> `paperwork.yaml` describes what a project requires before a session can end — a
+> **Refuse to end a session until your paperwork checks out.** A declarative
+> `paperwork.yaml` describes what a project requires before a session can close — a
 > session log at the expected path, specific frontmatter fields, edits reflected in
 > changelogs, findings that appear in both the session log and the tracking doc.
 > When the model tries to stop with rules unsatisfied, the Stop hook exits non-zero
 > and the session can't close. The model fixes its paperwork, then ends.
 
-This is the opposite of the plugin core's promise, and that's deliberate: it's an
-**opt-in** layer for projects that have committed to a paperwork contract and want
-it machine-enforced. The plugin core never blocks; the enforcement substrate is for
-teams who explicitly want a gate.
+This is the *discipline* in the tagline, made literal — not advisory, not
+after-the-fact. It's **opt-in** purely so the default stays a zero-friction on-ramp,
+not because a gate is at odds with the core: same product, dial turned up. The core
+records; the enforcement layer holds the line. A project switches it on once it has
+committed to a paperwork contract and wants it machine-checked instead of left to
+good intentions.
+
+Today that gate ships through recordkeeper's **assembler** rather than the plugin (a
+plugin-native gate is on the roadmap below). The assembler — `tools/assemble.py` —
+composes self-contained *substrates* (bundles of slash commands, hooks, and config
+fragments) into a project's `CLAUDE.md` and `.claude/` directory in one build step,
+with no runtime dependency on this repo afterward.
 
 ### Assembler quickstart
 
@@ -86,7 +92,7 @@ a session log → the Stop hook blocks. Done.
   `CLAUDE.md` and `.claude/`. Takes two positional args: the recordkeeper repo root
   and the target project directory.
 
-Richer plugin-native layers (blocking enforcement, a session manifest, guard dials,
+Richer plugin-native layers (a plugin-native gate, a session manifest, guard dials,
 human-only sentinels, multi-session orchestration) are planned for later releases.
 
 If you're authoring your own hooks, read [`PARKING_LOT.md`](./PARKING_LOT.md) first —

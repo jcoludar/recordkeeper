@@ -40,6 +40,6 @@ followups: [...]
 
 Session logs live at `<project>/sessions/YYYY-MM-DD-<slug>.md`. The hook hardcodes this path. Projects with a different convention either fork this substrate or wait for a future configurable-path enhancement.
 
-## Relationship to future Wave 3
+## Relationship to enforcement
 
-This substrate provides the *primitives*: canonical content for what valid paperwork looks like, plus accurate end-of-session timing. The future `paperwork-enforcement` substrate (Wave 3) adds BLOCKING enforcement on top: a separate Stop hook that refuses to let the session end until each `/debrief` checklist item passes. This substrate stays non-blocking forever.
+This substrate is the non-blocking recording layer: canonical content for what valid paperwork looks like, plus accurate end-of-session timing. The separate `paperwork-enforcement` substrate adds the opt-in **gate** on top — a blocking Stop hook that refuses to let a session end until each `/debrief` checklist item passes. Keeping them separate is deliberate: this substrate stays non-blocking by design, so a project gets honest records with zero risk of a wedged session and turns on enforcement only when it wants the contract held.

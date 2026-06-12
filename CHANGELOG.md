@@ -2,6 +2,22 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## v0.2.2 — 2026-06-12
+
+### Changed
+- **README + plugin description reframed for a coherent enforcement story.** Stopped
+  selling "never refuse to let you stop" as the product's whole identity and filing
+  blocking enforcement under "Legacy / the opposite of our promise." Enforcement is now
+  presented as what it is — the *discipline* in the tagline, made literal — and **opt-in
+  purely for ease of adoption**, not because a gate conflicts with the core. The core's
+  non-blocking, can't-wedge-your-session guarantee is kept, now framed as a virtue of the
+  default. README `## Legacy: …` → `## Turn it up: blocking enforcement (opt-in)`; the
+  assembler is described as a packaging detail (plugin-native gate on the roadmap) rather
+  than a deprecated path.
+- `substrate/session-paperwork/module.md` — `Relationship to future Wave 3` →
+  `Relationship to enforcement`; dropped internal "Wave 3" jargon and the implication that
+  enforcement is unbuilt (the `paperwork-enforcement` substrate ships today).
+
 ## v0.2.1 — 2026-06-11
 
 ### Added
