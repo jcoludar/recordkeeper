@@ -45,6 +45,14 @@ followups: []                           # short bullets; index will surface thes
 
 - [ ] Concrete TODO that survives this session.
 - ...
+
+## Handoff
+
+The next session reads this cold — write it last. This *is* the handoff; don't keep a separate file.
+
+- **State at close.** Where things stand (branch, what's built/parked, test status).
+- **Next.** The first thing the next session should do.
+- **Blockers.** Anything that must resolve first (also in `followups:`).
 ```
 
 **Vocabulary note.** `status` uses underscored values (`in_progress`, `done`, `paused`).

@@ -92,9 +92,10 @@ def _interpolate_config_skip_unresolved(
     *,
     today: str | None,
     session_slug: str | None,
+    session_date: str | None = None,
 ) -> dict:
-    """Interpolate {today} / {session-slug} in every string value. Rules with
-    unresolvable tokens are dropped (with a logged note).
+    """Interpolate {today} / {session-slug} / {session-date} in every string value.
+    Rules with unresolvable tokens are dropped (with a logged note).
     """
     out = {
         "session-log-dir": config.get("session-log-dir", "sessions"),
@@ -104,7 +105,9 @@ def _interpolate_config_skip_unresolved(
     for rule in config.get("files", []):
         try:
             out["files"].append(
-                interp.apply_recursive(rule, today=today, session_slug=session_slug)
+                interp.apply_recursive(
+                    rule, today=today, session_slug=session_slug, session_date=session_date
+                )
             )
         except interp.UnresolvedToken as exc:
             print(
@@ -114,7 +117,9 @@ def _interpolate_config_skip_unresolved(
     for rule in config.get("consistency", []):
         try:
             out["consistency"].append(
-                interp.apply_recursive(rule, today=today, session_slug=session_slug)
+                interp.apply_recursive(
+                    rule, today=today, session_slug=session_slug, session_date=session_date
+                )
             )
         except interp.UnresolvedToken as exc:
             print(
@@ -139,7 +144,11 @@ def _run_stop_hook(project_dir: Path) -> int:
     inflight = sl.find_in_flight_log(sessions_dir, today=_today_iso())
     started_at: str | None = None
     session_slug: str | None = None
+    session_date: str | None = None
     if inflight is not None:
+        # The in-flight log's OWN date — used so file rules resolve against the
+        # log actually in play, not {today} (they differ across midnight).
+        session_date = sl.session_date_from_name(inflight.name)
         try:
             text = inflight.read_text()
         except OSError as exc:
@@ -160,7 +169,7 @@ def _run_stop_hook(project_dir: Path) -> int:
 
     today = _today_iso()
     resolved = _interpolate_config_skip_unresolved(
-        config, today=today, session_slug=session_slug
+        config, today=today, session_slug=session_slug, session_date=session_date
     )
 
     edit_log_path = project_dir / ".claude" / "state" / "paperwork-edit-log.jsonl"

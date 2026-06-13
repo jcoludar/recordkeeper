@@ -360,3 +360,65 @@ def test_internal_error_exits_two(tmp_path, monkeypatch, capsys):
     err = capsys.readouterr().err.lower()
     assert rc == 2
     assert "internal error" in err
+
+
+# ── Cross-midnight session — resolve against the log's own {session-date} ──
+#
+# A session that STARTED yesterday and stops after midnight has a log dated
+# yesterday. {today} (system date) no longer matches the log's filename/date, so
+# a {today}-built path false-blocks. {session-date} (the in-flight log's OWN date)
+# resolves the rule against the log actually in play.
+
+_CM_LOG_DATE = "2026-06-11"
+_CM_TODAY = "2026-06-12"
+
+
+def _project_with_yesterday_log(tmp_path, slug="night-owl", status="in_progress"):
+    project = tmp_path / "proj"
+    project.mkdir()
+    sessions = project / "sessions"
+    sessions.mkdir(parents=True)
+    started = f"{_CM_LOG_DATE}T23:30:00+02:00"
+    (sessions / f"{_CM_LOG_DATE}-{slug}.md").write_text(
+        f"---\ndate: {_CM_LOG_DATE}\nstarted_at: {started}\nslug: {slug}\n"
+        f"status: {status}\n---\n\nbody\n"
+    )
+    return project
+
+
+def test_cross_midnight_session_date_resolves_to_real_log(tmp_path, monkeypatch, capsys):
+    """With {session-date} the rule resolves against the log's OWN date, so a
+    session spanning midnight does NOT false-block (exit 0)."""
+    hook = _load_hook()
+    project = _project_with_yesterday_log(tmp_path)
+    _write_config(
+        project,
+        "files:\n"
+        "  - path: 'sessions/{session-date}-{session-slug}.md'\n"
+        "    must-exist: true\n"
+        "    frontmatter:\n"
+        "      date: {required: true, equals: '{session-date}'}\n",
+    )
+    monkeypatch.setattr(hook, "_today_iso", lambda: _CM_TODAY)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    rc = hook.main()
+    err = capsys.readouterr().err
+    assert rc == 0
+    assert err == ""
+
+
+def test_cross_midnight_today_token_false_blocks(tmp_path, monkeypatch, capsys):
+    """Regression rationale (the cross-midnight bug): the OLD {today}-built path
+    false-blocks the same cross-midnight session, because the log is dated yesterday."""
+    hook = _load_hook()
+    project = _project_with_yesterday_log(tmp_path)
+    _write_config(
+        project,
+        "files:\n  - path: 'sessions/{today}-{session-slug}.md'\n    must-exist: true\n",
+    )
+    monkeypatch.setattr(hook, "_today_iso", lambda: _CM_TODAY)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    rc = hook.main()
+    assert rc == 2

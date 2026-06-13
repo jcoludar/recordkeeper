@@ -129,3 +129,47 @@ def test_apply_recursive_raises_on_unresolved_with_path_context():
     with pytest.raises(interp.UnresolvedToken) as exc_info:
         interp.apply_recursive(config, today="2026-05-13", session_slug=None)
     assert "session-slug" in str(exc_info.value)
+
+
+# ── {session-date} token (cross-midnight) ─────────────────────────────────
+
+
+def test_expand_tokens_replaces_session_date():
+    result = interp.expand_tokens(
+        "sessions/{session-date}-{session-slug}.md",
+        today="2026-06-12",
+        session_slug="night-owl",
+        session_date="2026-06-11",
+    )
+    assert result == "sessions/2026-06-11-night-owl.md"
+
+
+def test_expand_tokens_raises_when_session_date_referenced_but_none():
+    with pytest.raises(interp.UnresolvedToken) as exc_info:
+        interp.expand_tokens(
+            "{session-date}", today="2026-06-12", session_slug="x", session_date=None
+        )
+    assert "session-date" in str(exc_info.value)
+
+
+def test_needs_session_context_true_when_session_date_referenced():
+    assert interp.needs_session_context("sessions/{session-date}.md") is True
+
+
+def test_apply_recursive_expands_session_date():
+    config = {
+        "files": [
+            {
+                "path": "sessions/{session-date}-{session-slug}.md",
+                "frontmatter": {"date": {"equals": "{session-date}"}},
+            }
+        ]
+    }
+    out = interp.apply_recursive(
+        config,
+        today="2026-06-12",
+        session_slug="night-owl",
+        session_date="2026-06-11",
+    )
+    assert out["files"][0]["path"] == "sessions/2026-06-11-night-owl.md"
+    assert out["files"][0]["frontmatter"]["date"]["equals"] == "2026-06-11"

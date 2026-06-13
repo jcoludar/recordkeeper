@@ -1,7 +1,7 @@
 {
   "name": "recordkeeper",
   "description": "Honest session records for Claude Code: orient at the start, checklist at the end, end-times you can trust — records by default, enforces the moment you ask.",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "author": { "name": "Joha Coludar", "email": "jcoludar@gmail.com" },
   "license": "MIT",
   "homepage": "https://github.com/jcoludar/recordkeeper",

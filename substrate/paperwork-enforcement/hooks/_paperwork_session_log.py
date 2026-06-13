@@ -37,6 +37,19 @@ def has_ended_at(text: str) -> bool:
 
 _STARTED_AT_RE = re.compile(r"^started_at:\s*(.+?)\s*$", re.MULTILINE)
 _SLUG_RE = re.compile(r"^slug:\s*(.+?)\s*$", re.MULTILINE)
+_SESSION_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-")
+
+
+def session_date_from_name(name: str) -> str | None:
+    """The in-flight log's OWN date — the leading YYYY-MM-DD of its filename.
+
+    Used to resolve file rules against the log actually in play, not the system's
+    {today} (which differs for a session spanning midnight). Returns None when the
+    filename has no date prefix (a project not using date-prefixed names; such a
+    config wouldn't reference {session-date} in its path anyway).
+    """
+    m = _SESSION_DATE_RE.match(name)
+    return m.group(1) if m else None
 
 
 def _strip_yaml_quotes(value: str) -> str:

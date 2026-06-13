@@ -43,7 +43,7 @@ consistency:                     # list of cross-document rules
     must-also-appear-in: ["TECHNICAL_DEBT.md"]
 ```
 
-**Interpolation tokens** (expanded in every string value): `{today}` (today's date), `{session-slug}` (from the in-flight log's `slug:` field).
+**Interpolation tokens** (expanded in every string value): `{today}` (today's date), `{session-slug}` (from the in-flight log's `slug:` field), `{session-date}` (the in-flight log's *own* date, from its filename prefix — use it instead of `{today}` in the session-log path/`date:` so a session spanning midnight, whose log is dated yesterday, is checked against its real date).
 
 **Predicate vocabulary v1:**
 - `must-exist: <bool>` — at least one (or zero) matched files.
@@ -60,7 +60,7 @@ See `paperwork.yaml.example` shipped with this substrate for a fully-annotated t
 Every Stop event:
 1. Load `paperwork.yaml`. Missing → silent no-op.
 2. Resolve in-flight session log under `session-log-dir`.
-3. Interpolate `{today}` / `{session-slug}` in the config.
+3. Interpolate `{today}` / `{session-slug}` / `{session-date}` in the config.
 4. Filter the edit log to the current session via `started_at`.
 5. Walk every `files:` and `consistency:` rule; collect every failure.
 6. Exit 0 silent on pass. Any tier-1 failure → exit 2 with `paperwork-enforcement: N rule(s) failed.` + grouped reasons. Tier-2-only failures → exit 0 with a non-blocking advisory.
@@ -77,4 +77,4 @@ Every timestamp the substrate writes (PostToolUse edit log `ts:`, `{today}` inte
 
 ## Out of scope (intentional)
 
-Project-specific interpolation tokens beyond `{today}` / `{session-slug}` (no `{ticket-id}` etc. — those need pluggable extractors, a future substrate). Tag-based `when:` conditions. Time-window predicates. Auto-fix mode (substrate reports, never edits). Cross-day session enforcement.
+Project-specific interpolation tokens beyond `{today}` / `{session-slug}` / `{session-date}` (no `{ticket-id}` etc. — those need pluggable extractors, a future substrate). Tag-based `when:` conditions. Time-window predicates. Auto-fix mode (substrate reports, never edits). (A session log spanning midnight is handled via `{session-date}`, which resolves against the log's own date.)

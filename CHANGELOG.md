@@ -2,6 +2,30 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## v0.2.4 — 2026-06-13
+
+### Changed
+- **The session log IS the handoff.** `/debrief` now writes a `## Handoff` section
+  (state-at-close · next · blockers) at the bottom of the session log instead of
+  pointing at a separate `NEXT_SESSION_HANDOFF.md`; `/begin-session` reads that
+  handoff first and, on finding an unclosed (`in_progress`) prior log, surfaces it
+  to the user and offers to close it — never silently rewriting another session's
+  record. The session-log template gains a matching `## Handoff` section.
+
+### Fixed
+- **Cross-midnight enforcement false-block.** A session that started yesterday and
+  stops after midnight has a log dated yesterday, but the `paperwork-enforcement`
+  Stop hook rebuilt the session-log path and `date:` assertion from `{today}`
+  (system date) — so the rule resolved to a non-existent today-dated file and
+  false-blocked the Stop once (it passed on retry via `stop_hook_active`). A new
+  `{session-date}` interpolation token — the in-flight log's OWN date, read from its
+  filename prefix — resolves file rules against the log actually in play. The
+  bundled example configs (the `paperwork.yaml.example` template and the
+  `examples/paperwork-configs/` snippets) now use `{session-date}` for the
+  session-log path and `date: equals`; `{today}` is kept for rules that genuinely
+  mean "today". This keeps `date: equals` a real invariant (frontmatter date must
+  equal the filename date).
+
 ## v0.2.2 — 2026-06-12
 
 ### Changed

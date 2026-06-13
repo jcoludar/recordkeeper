@@ -160,3 +160,15 @@ def test_find_in_flight_falls_back_without_pointer(tmp_path):
     cur.write_text("---\ndate: 2026-06-03\nstarted_at: 2026-06-03T08:00:00+02:00\nslug: cur\nstatus: in_progress\n---\n\nx\n")
     result = sl.find_in_flight_log(sessions, today="2026-06-03")
     assert result is not None and result.name == "2026-06-03-cur.md"
+
+
+# ── session_date_from_name (cross-midnight) ───────────────────────────────
+
+
+def test_session_date_from_name_extracts_prefix():
+    assert sl.session_date_from_name("2026-06-11-night-owl.md") == "2026-06-11"
+
+
+def test_session_date_from_name_none_when_no_date_prefix():
+    assert sl.session_date_from_name("notes.md") is None
+    assert sl.session_date_from_name("draft-2026-06-11.md") is None

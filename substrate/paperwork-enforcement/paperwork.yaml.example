@@ -21,15 +21,18 @@ files:
   #
   # `{today}` expands to YYYY-MM-DD (system local timezone).
   # `{session-slug}` expands to the in-flight session log's `slug:` value.
+  # `{session-date}` expands to the in-flight log's OWN date (its filename
+  #   prefix) — use it (not `{today}`) for the session-log path so a session
+  #   spanning midnight (log dated yesterday) checks against its real date.
   # Other tokens are out of scope in v1 — use regex (`matches:`) to validate
   # session-specific IDs etc.
-  - path: "sessions/{today}-{session-slug}.md"
+  - path: "sessions/{session-date}-{session-slug}.md"
     must-exist: true
     must-be-modified-this-session: true
     frontmatter:
       date:
         required: true
-        equals: "{today}"
+        equals: "{session-date}"
       started_at:
         required: true
         matches: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}$"
