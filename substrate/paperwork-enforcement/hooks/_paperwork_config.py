@@ -30,7 +30,7 @@ FILE_ENTRY_KEYS = {
     "tier",
 }
 FRONTMATTER_FIELD_KEYS = {"required", "equals", "in", "matches"}
-WHEN_KEYS = {"when-files-modified-matching"}
+WHEN_KEYS = {"when-files-modified-matching", "when-frontmatter"}
 CONSISTENCY_KEYS = {"name", "find", "in", "must-also-appear-in", "tier"}
 VALID_TIERS = {1, 2}
 
@@ -71,6 +71,12 @@ def _validate_when(when_obj: Any, context: str) -> None:
     if not isinstance(when_obj, dict):
         raise ConfigError(f"{context}: `when:` must be a mapping")
     _check_unknown_keys(when_obj, WHEN_KEYS, f"{context}: when")
+    fm = when_obj.get("when-frontmatter")
+    if fm is not None and not isinstance(fm, dict):
+        raise ConfigError(
+            f"{context}: when.when-frontmatter must be a mapping of field -> value-or-list, "
+            f"got {type(fm).__name__}"
+        )
 
 
 def _validate_tier(entry: dict[str, Any], context: str) -> None:

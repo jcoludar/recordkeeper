@@ -422,3 +422,92 @@ def test_cross_midnight_today_token_false_blocks(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("sys.stdin", StringIO("{}"))
     rc = hook.main()
     assert rc == 2
+
+
+# ── Rule-split: status-conditional enforcement (begin-session vs debrief) ──
+#
+# End-to-end proof that the Stop hook threads the in-flight log's `status` into
+# the engine, so the debrief entry (gated on terminal status) is skipped while
+# in_progress and armed once the session declares it is closing.
+
+
+_RULE_SPLIT_CONFIG = (
+    "files:\n"
+    "  - path: 'sessions/{today}-{session-slug}.md'\n"
+    "    must-exist: true\n"
+    "    must-be-modified-this-session: true\n"
+    "    frontmatter:\n"
+    "      date: {required: true, equals: '{today}'}\n"
+    "      slug: {required: true, equals: '{session-slug}'}\n"
+    "      status: {required: true, in: [done, paused, in_progress]}\n"
+    "  - path: 'sessions/{today}-{session-slug}.md'\n"
+    "    when:\n"
+    "      when-frontmatter:\n"
+    "        status: [done, paused]\n"
+    "    frontmatter:\n"
+    "      followups: {required: true}\n"
+    "      topics: {required: true}\n"
+    "      areas: {required: true}\n"
+)
+
+
+def _project_with_log_status(tmp_path, status, *, debrief=False, slug="wave-3"):
+    project = tmp_path / "proj"
+    project.mkdir()
+    sessions = project / "sessions"
+    sessions.mkdir(parents=True)
+    extra = "followups: [a]\ntopics: [t]\nareas: [platform]\n" if debrief else ""
+    (sessions / f"{_FIXTURE_DATE}-{slug}.md").write_text(
+        f"---\ndate: {_FIXTURE_DATE}\nstarted_at: {_FIXTURE_STARTED_AT}\n"
+        f"slug: {slug}\nstatus: {status}\n{extra}---\n\nbody\n"
+    )
+    log_path = project / ".claude" / "state" / "paperwork-edit-log.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text(json.dumps({
+        "started_at": _FIXTURE_STARTED_AT, "ts": _FIXTURE_STARTED_AT,
+        "tool": "Write", "path": f"sessions/{_FIXTURE_DATE}-{slug}.md",
+    }) + "\n")
+    return project
+
+
+def test_rule_split_begin_session_in_progress_passes(tmp_path, monkeypatch, capsys):
+    """An in_progress log with no followups/topics/areas must pass: the debrief
+    entry is gated off until status is terminal."""
+    hook = _load_hook()
+    project = _project_with_log_status(tmp_path, "in_progress")
+    _write_config(project, _RULE_SPLIT_CONFIG)
+    monkeypatch.setattr(hook, "_today_iso", lambda: _FIXTURE_DATE)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    rc = hook.main()
+    err = capsys.readouterr().err
+    assert rc == 0
+    assert err == ""
+
+
+def test_rule_split_done_without_debrief_fields_blocks(tmp_path, monkeypatch, capsys):
+    """Flip status to done with no debrief fields → the gated entry fires → blocks."""
+    hook = _load_hook()
+    project = _project_with_log_status(tmp_path, "done", debrief=False)
+    _write_config(project, _RULE_SPLIT_CONFIG)
+    monkeypatch.setattr(hook, "_today_iso", lambda: _FIXTURE_DATE)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    rc = hook.main()
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "followups" in err
+
+
+def test_rule_split_done_with_debrief_fields_passes(tmp_path, monkeypatch, capsys):
+    """A properly debriefed done log passes both entries."""
+    hook = _load_hook()
+    project = _project_with_log_status(tmp_path, "done", debrief=True)
+    _write_config(project, _RULE_SPLIT_CONFIG)
+    monkeypatch.setattr(hook, "_today_iso", lambda: _FIXTURE_DATE)
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.setattr("sys.stdin", StringIO("{}"))
+    rc = hook.main()
+    err = capsys.readouterr().err
+    assert rc == 0
+    assert err == ""

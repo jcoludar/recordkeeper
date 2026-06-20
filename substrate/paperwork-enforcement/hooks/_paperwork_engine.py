@@ -32,13 +32,18 @@ def evaluate_file_rule(
     rule: dict[str, Any],
     project_dir: Path,
     edit_log: list[dict[str, Any]],
+    inflight_frontmatter: dict[str, Any] | None = None,
 ) -> list[Failure]:
     """Evaluate a single `files:` entry. Returns all failures.
 
     Order: when: clause first (skip if false); then must-exist; if it fails,
     skip downstream. Otherwise: must-be-modified, then frontmatter per match.
     """
-    if not when_clause_holds(when=rule.get("when"), edit_log=edit_log):
+    if not when_clause_holds(
+        when=rule.get("when"),
+        edit_log=edit_log,
+        inflight_frontmatter=inflight_frontmatter,
+    ):
         return []
     pattern = rule["path"]
     tier = rule.get("tier", 1)
@@ -95,18 +100,40 @@ def evaluate_file_rule(
 # ── when: gating (T9) ─────────────────────────────────────────────────────
 
 
-def when_clause_holds(*, when: dict[str, Any] | None, edit_log: list[dict[str, Any]]) -> bool:
-    """Evaluate a `when:` clause. Returns True if the gate allows the rule to run."""
+def when_clause_holds(
+    *,
+    when: dict[str, Any] | None,
+    edit_log: list[dict[str, Any]],
+    inflight_frontmatter: dict[str, Any] | None = None,
+) -> bool:
+    """Evaluate a `when:` clause. Returns True if the gate allows the rule to run.
+
+    Sub-conditions combine with AND — every present condition must hold:
+    - `when-files-modified-matching`: some edit-log path matches the glob.
+    - `when-frontmatter`: the in-flight session log's frontmatter field is in the
+      given value-or-set. This is the "session phase" gate — it lets a rule fire
+      only once the log declares (via `status`) that it's closing, which is how
+      /begin-session's `in_progress` log skips the debrief rule while /debrief's
+      terminal status arms it.
+    """
     if not when:
         return True
+
     pattern = when.get("when-files-modified-matching")
-    if pattern is None:
-        return True
-    for entry in edit_log:
-        path = entry.get("path", "")
-        if fnmatch.fnmatch(path, pattern):
-            return True
-    return False
+    if pattern is not None:
+        if not any(fnmatch.fnmatch(e.get("path", ""), pattern) for e in edit_log):
+            return False
+
+    fm_cond = when.get("when-frontmatter")
+    if fm_cond is not None:
+        fm = inflight_frontmatter or {}
+        for field, expected in fm_cond.items():
+            allowed = {str(v) for v in (expected if isinstance(expected, list) else [expected])}
+            actual = fm.get(field)
+            if actual is None or str(actual) not in allowed:
+                return False
+
+    return True
 
 
 # ── consistency rules (T10) ───────────────────────────────────────────────
@@ -220,12 +247,16 @@ def run_all(
     config: dict[str, Any],
     project_dir: Path,
     edit_log: list[dict[str, Any]],
+    inflight_frontmatter: dict[str, Any] | None = None,
 ) -> list[Failure]:
     """Top-level engine entry point — walks every files: rule and every consistency: rule."""
     failures: list[Failure] = []
     for rule in config.get("files", []):
         failures.extend(evaluate_file_rule(
-            rule=rule, project_dir=project_dir, edit_log=edit_log,
+            rule=rule,
+            project_dir=project_dir,
+            edit_log=edit_log,
+            inflight_frontmatter=inflight_frontmatter,
         ))
     for rule in config.get("consistency", []):
         failures.extend(evaluate_consistency_rule(

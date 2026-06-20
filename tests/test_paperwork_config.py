@@ -239,3 +239,49 @@ def test_files_or_consistency_absent_is_legal(tmp_path):
     result = cfg.load_and_validate(path)
     assert result["files"] == []
     assert result["consistency"] == []
+
+
+# ── when-frontmatter sub-key ──────────────────────────────────────────────
+
+
+def test_when_frontmatter_accepted(tmp_path):
+    path = tmp_path / "paperwork.yaml"
+    path.write_text(
+        "files:\n"
+        "  - path: x\n"
+        "    when:\n"
+        "      when-frontmatter:\n"
+        "        status: [done, paused]\n"
+    )
+    result = cfg.load_and_validate(path)
+    assert result["files"][0]["when"]["when-frontmatter"]["status"] == ["done", "paused"]
+
+
+def test_when_frontmatter_unknown_subkey_did_you_mean(tmp_path):
+    path = tmp_path / "paperwork.yaml"
+    path.write_text(
+        "files:\n"
+        "  - path: x\n"
+        "    when:\n"
+        "      when-frontmater: {status: [done]}\n"  # typo
+    )
+    with pytest.raises(cfg.ConfigError) as exc_info:
+        cfg.load_and_validate(path)
+    msg = str(exc_info.value)
+    assert "when-frontmater" in msg
+    assert "when-frontmatter" in msg
+
+
+def test_when_frontmatter_must_be_mapping(tmp_path):
+    path = tmp_path / "paperwork.yaml"
+    path.write_text(
+        "files:\n"
+        "  - path: x\n"
+        "    when:\n"
+        "      when-frontmatter: 'done'\n"  # scalar, not a mapping
+    )
+    # Match the new mapping-validation branch's distinctive message, NOT just the
+    # substring "when-frontmatter" (which the pre-existing unknown-key path also
+    # emits) — so this test genuinely guards _validate_when's type check.
+    with pytest.raises(cfg.ConfigError, match="must be a mapping"):
+        cfg.load_and_validate(path)

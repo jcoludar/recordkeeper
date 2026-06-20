@@ -41,6 +41,7 @@ try:
     import _paperwork_edit_log as el
     import _paperwork_engine as engine
     import _paperwork_interpolation as interp
+    import _paperwork_predicates as pred
     import _paperwork_session_log as sl
 
     _IMPORT_ERROR: Exception | None = None
@@ -78,6 +79,10 @@ def _config_needs_session_context(config: dict) -> bool:
                 yield from walk(v)
     for rule in config.get("files", []):
         if "must-be-modified-this-session" in rule:
+            return True
+        when = rule.get("when")
+        if isinstance(when, dict) and "when-frontmatter" in when:
+            # Gating on the in-flight log's frontmatter requires that log to exist.
             return True
         if any(walk(rule)):
             return True
@@ -145,6 +150,7 @@ def _run_stop_hook(project_dir: Path) -> int:
     started_at: str | None = None
     session_slug: str | None = None
     session_date: str | None = None
+    inflight_frontmatter: dict | None = None
     if inflight is not None:
         # The in-flight log's OWN date — used so file rules resolve against the
         # log actually in play, not {today} (they differ across midnight).
@@ -158,6 +164,13 @@ def _run_stop_hook(project_dir: Path) -> int:
             )
             return 2
         started_at, session_slug = sl.parse_started_at_and_slug(text)
+        # Parse the in-flight log's full frontmatter so `when-frontmatter` gates
+        # (status-conditional enforcement) can read the session phase. A broken
+        # frontmatter leaves it None — gates then evaluate as not-satisfied.
+        try:
+            inflight_frontmatter = pred.parse_frontmatter_dict(inflight)
+        except pred.FrontmatterParseError:
+            inflight_frontmatter = None
 
     if started_at is None and _config_needs_session_context(config):
         print(
@@ -181,7 +194,10 @@ def _run_stop_hook(project_dir: Path) -> int:
     )
 
     failures = engine.run_all(
-        config=resolved, project_dir=project_dir, edit_log=session_entries
+        config=resolved,
+        project_dir=project_dir,
+        edit_log=session_entries,
+        inflight_frontmatter=inflight_frontmatter,
     )
     # tier 1 (default) blocks the Stop; tier 2 is deferred — surfaced as an
     # advisory but never blocks. See tier:1|2 rule annotation.

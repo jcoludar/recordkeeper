@@ -497,3 +497,201 @@ def test_format_advisory_renders_deferred_without_blocking_footer():
     assert "frontmatter.note missing" in out
     # Must NOT carry the blocking call-to-action — these don't block the session.
     assert "end the session again" not in out.lower()
+
+
+# ── when-frontmatter gating (status-conditional enforcement) ───────────────
+#
+# Gates a rule on the in-flight session log's frontmatter (its "session phase").
+# This is what lets /begin-session's `status: in_progress` log pass while still
+# hard-enforcing the debrief fields the instant /debrief flips status to terminal.
+
+
+def test_when_frontmatter_holds_when_value_in_set():
+    assert engine.when_clause_holds(
+        when={"when-frontmatter": {"status": ["done", "paused"]}},
+        edit_log=[],
+        inflight_frontmatter={"status": "done"},
+    ) is True
+
+
+def test_when_frontmatter_false_when_value_not_in_set():
+    assert engine.when_clause_holds(
+        when={"when-frontmatter": {"status": ["done", "paused"]}},
+        edit_log=[],
+        inflight_frontmatter={"status": "in_progress"},
+    ) is False
+
+
+def test_when_frontmatter_accepts_scalar_value():
+    assert engine.when_clause_holds(
+        when={"when-frontmatter": {"status": "done"}},
+        edit_log=[],
+        inflight_frontmatter={"status": "done"},
+    ) is True
+
+
+def test_when_frontmatter_false_when_field_absent():
+    assert engine.when_clause_holds(
+        when={"when-frontmatter": {"status": ["done"]}},
+        edit_log=[],
+        inflight_frontmatter={},
+    ) is False
+
+
+def test_when_frontmatter_false_when_no_inflight_context():
+    """No in-flight frontmatter at all → gate cannot be satisfied → closed."""
+    assert engine.when_clause_holds(
+        when={"when-frontmatter": {"status": ["done"]}},
+        edit_log=[],
+        inflight_frontmatter=None,
+    ) is False
+
+
+def test_when_combines_files_and_frontmatter_with_and():
+    base = {
+        "when-files-modified-matching": "src/**",
+        "when-frontmatter": {"status": ["done"]},
+    }
+    # files satisfied, frontmatter not → overall False
+    assert engine.when_clause_holds(
+        when=base,
+        edit_log=[{"path": "src/x.py"}],
+        inflight_frontmatter={"status": "in_progress"},
+    ) is False
+    # both satisfied → True
+    assert engine.when_clause_holds(
+        when=base,
+        edit_log=[{"path": "src/x.py"}],
+        inflight_frontmatter={"status": "done"},
+    ) is True
+
+
+def test_file_rule_skipped_when_frontmatter_gate_false(tmp_path):
+    """Debrief entry must NOT fire while the session is still in_progress."""
+    (tmp_path / "sessions").mkdir()
+    (tmp_path / "sessions" / "x.md").write_text("---\nstatus: in_progress\n---\n")
+    failures = engine.evaluate_file_rule(
+        rule={
+            "path": "sessions/x.md",
+            "when": {"when-frontmatter": {"status": ["done", "paused"]}},
+            "frontmatter": {"followups": {"required": True}},  # would fail if run
+        },
+        project_dir=tmp_path,
+        edit_log=[],
+        inflight_frontmatter={"status": "in_progress"},
+    )
+    assert failures == []
+
+
+def test_file_rule_runs_when_frontmatter_gate_true(tmp_path):
+    """Once status is terminal, the debrief entry fires and enforces its fields."""
+    (tmp_path / "sessions").mkdir()
+    (tmp_path / "sessions" / "x.md").write_text("---\nstatus: done\n---\n")
+    failures = engine.evaluate_file_rule(
+        rule={
+            "path": "sessions/x.md",
+            "when": {"when-frontmatter": {"status": ["done", "paused"]}},
+            "frontmatter": {"followups": {"required": True}},  # missing → fail
+        },
+        project_dir=tmp_path,
+        edit_log=[],
+        inflight_frontmatter={"status": "done"},
+    )
+    assert len(failures) == 1
+    assert "followups" in failures[0].reason
+
+
+# ── run_all: the rule-split end-to-end (begin-session vs debrief) ──────────
+
+
+def _rule_split_config():
+    """The two-entry status-conditional config (literal paths; interpolation is
+    the Stop hook's job, done before run_all is reached)."""
+    return {
+        "session-log-dir": "sessions",
+        "files": [
+            {
+                "path": "sessions/2026-06-10-x.md",
+                "must-exist": True,
+                "must-be-modified-this-session": True,
+                "frontmatter": {
+                    "date": {"required": True, "equals": "2026-06-10"},
+                    "slug": {"required": True, "equals": "x"},
+                    "started_at": {
+                        "required": True,
+                        "matches": r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$",
+                    },
+                    "status": {"required": True, "in": ["done", "paused", "in_progress"]},
+                },
+            },
+            {
+                "path": "sessions/2026-06-10-x.md",
+                "when": {"when-frontmatter": {"status": ["done", "paused"]}},
+                "frontmatter": {
+                    "followups": {"required": True},
+                    "topics": {"required": True},
+                    "areas": {"required": True},
+                },
+            },
+        ],
+        "consistency": [],
+    }
+
+
+def _write_log(tmp_path, status, *, extra=""):
+    (tmp_path / "sessions").mkdir(exist_ok=True)
+    log = tmp_path / "sessions" / "2026-06-10-x.md"
+    log.write_text(
+        "---\n"
+        "date: '2026-06-10'\n"
+        "slug: x\n"
+        "started_at: '2026-06-10T14:38:11+02:00'\n"
+        f"status: {status}\n"
+        f"{extra}"
+        "---\nbody\n"
+    )
+    return log
+
+
+def test_run_all_rule_split_begin_session_in_progress_passes(tmp_path):
+    """A freshly-begun in_progress log (no followups/topics/areas) passes:
+    Entry 1 always-checks structure (OK); Entry 2 is gated off by terminal-status."""
+    _write_log(tmp_path, "in_progress")
+    failures = engine.run_all(
+        config=_rule_split_config(),
+        project_dir=tmp_path,
+        edit_log=[{"path": "sessions/2026-06-10-x.md"}],
+        inflight_frontmatter={"status": "in_progress"},
+    )
+    assert failures == []
+
+
+def test_run_all_rule_split_done_without_debrief_fields_blocks(tmp_path):
+    """Flip status to done with no followups/topics/areas → Entry 2 fires, blocks."""
+    _write_log(tmp_path, "done")
+    failures = engine.run_all(
+        config=_rule_split_config(),
+        project_dir=tmp_path,
+        edit_log=[{"path": "sessions/2026-06-10-x.md"}],
+        inflight_frontmatter={"status": "done"},
+    )
+    reasons = " ".join(f.reason for f in failures)
+    assert "followups" in reasons
+    assert "topics" in reasons
+    assert "areas" in reasons
+
+
+def test_run_all_rule_split_done_with_debrief_fields_passes(tmp_path):
+    """A properly debriefed done log passes both entries."""
+    _write_log(
+        tmp_path,
+        "done",
+        extra="followups: [a]\ntopics: [t]\nareas: [platform]\n",
+    )
+    failures = engine.run_all(
+        config=_rule_split_config(),
+        project_dir=tmp_path,
+        edit_log=[{"path": "sessions/2026-06-10-x.md"}],
+        inflight_frontmatter={"status": "done"},
+    )
+    assert failures == []
