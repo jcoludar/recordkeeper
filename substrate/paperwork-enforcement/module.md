@@ -50,7 +50,10 @@ consistency:                     # list of cross-document rules
 - `must-be-modified-this-session: <bool>` — matched file(s) appear in this session's edit log.
 - `frontmatter.<field>: {required, equals, in, matches}` — field-by-field assertions.
 - `when.when-files-modified-matching: <glob>` — gate a file rule on edit-log activity.
+- `when.when-frontmatter: {<field>: <value-or-list>}` — gate a file rule on the in-flight session log's frontmatter (its "session phase"). The rule runs only when that field's value is in the given set. Multiple `when.*` sub-conditions combine with **AND**.
 - `tier: <1|2>` — rule severity, on any file or consistency rule. Tier 1 (default) blocks the Stop; tier 2 is surfaced as a non-blocking advisory ("deferred"). Lets a project distinguish "must fix before next session" from "track but don't block".
+
+**Status-conditional enforcement (recommended session-log shape).** Split the session-log checks into two `files:` entries on the same path: Entry 1 (always) asserts the *creation* contract `/begin-session` fills (`date`/`slug`/`started_at` + `status: {in: [done, paused, in_progress]}`); Entry 2, gated by `when.when-frontmatter: {status: [done, paused]}`, asserts the *debrief* contract (`followups`/`topics`/`areas`). This way a freshly-begun `in_progress` log yields cleanly while the closing checklist is hard-enforced the instant `/debrief` flips `status` to terminal. (Without this split, the first Stop after every `/begin-session` blocks, since an `in_progress` log has no debrief fields yet.)
 - `consistency` — for each regex capture in source body, the literal capture must appear in every listed target file (or in at least one match of a glob target). The `find:` regex is validated at config load (must compile; at most one capturing group).
 
 See `paperwork.yaml.example` shipped with this substrate for a fully-annotated template.

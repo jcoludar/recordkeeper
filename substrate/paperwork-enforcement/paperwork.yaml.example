@@ -16,8 +16,19 @@ session-log-dir: "sessions"
 # optional — an entry with only `path:` is a no-op.
 files:
 
-  # Example: today's session log must exist, must have been modified this
-  # session, and must have required frontmatter fields.
+  # STATUS-CONDITIONAL ENFORCEMENT (the recommended session-log shape).
+  #
+  # Split the session-log checks into two entries on the SAME path:
+  #   Entry 1 — the creation contract, ALWAYS checked. These are the fields
+  #             /begin-session fills at session start, so a freshly-begun
+  #             `status: in_progress` log passes cleanly.
+  #   Entry 2 — the debrief contract, gated by `when-frontmatter:` so it fires
+  #             ONLY once the log declares it is closing (status terminal).
+  #             /debrief flipping status -> done|paused arms these checks.
+  #
+  # This is what stops the first Stop after every /begin-session from blocking
+  # (an in_progress log has no followups yet) while still hard-enforcing the
+  # closing checklist the instant the session claims to be done.
   #
   # `{today}` expands to YYYY-MM-DD (system local timezone).
   # `{session-slug}` expands to the in-flight session log's `slug:` value.
@@ -26,6 +37,8 @@ files:
   #   spanning midnight (log dated yesterday) checks against its real date.
   # Other tokens are out of scope in v1 — use regex (`matches:`) to validate
   # session-specific IDs etc.
+
+  # Entry 1 — creation contract. Always evaluated.
   - path: "sessions/{session-date}-{session-slug}.md"
     must-exist: true
     must-be-modified-this-session: true
@@ -41,7 +54,16 @@ files:
         equals: "{session-slug}"
       status:
         required: true
-        in: [done, paused]
+        in: [done, paused, in_progress]
+
+  # Entry 2 — debrief contract. `when-frontmatter` gates this on the in-flight
+  # log's own `status`, so it is skipped while in_progress and fires once
+  # terminal. (If you claim done, you must be done.)
+  - path: "sessions/{session-date}-{session-slug}.md"
+    when:
+      when-frontmatter:
+        status: [done, paused]
+    frontmatter:
       followups:
         required: true
 
