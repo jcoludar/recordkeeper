@@ -1,12 +1,31 @@
 session-log-dir: "sessions"
 
+# The recommended session-log shape: two entries on the SAME path.
+#   Entry 1 — creation contract, ALWAYS checked. /begin-session fills these at
+#             session start, so a freshly-begun `status: in_progress` log passes.
+#   Entry 2 — debrief contract, gated by `when-frontmatter:` so it fires ONLY
+#             once the log declares it is closing (status terminal). This is what
+#             stops the first Stop after /begin-session from blocking while still
+#             enforcing the closing checklist the instant the session claims done.
 files:
+
+  # Entry 1 — creation contract. Always evaluated.
   - path: "sessions/{session-date}-{session-slug}.md"
     must-exist: true
     must-be-modified-this-session: true
     frontmatter:
       status:
         required: true
-        in: [done, paused]
+        in: [done, paused, in_progress]
       slug:
+        required: true
+
+  # Entry 2 — debrief contract. Gated on the in-flight log's own `status`, so it
+  # is skipped while in_progress and fires once terminal.
+  - path: "sessions/{session-date}-{session-slug}.md"
+    when:
+      when-frontmatter:
+        status: [done, paused]
+    frontmatter:
+      followups:
         required: true

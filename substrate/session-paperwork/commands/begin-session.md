@@ -28,7 +28,7 @@ If the project maintains a priorities file (`OVERVIEW.md`, `NOW.md`, etc.), read
 
 State to the user what you intend to do this session. Examples:
 - "Focus: finish T6 fix from yesterday."
-- "Open-ended: user wants to discuss Wave 3 design before any code."
+- "Open-ended: user wants to discuss the design before any code."
 
 This declaration anchors the session — `/debrief` later checks: did we do what we said?
 
