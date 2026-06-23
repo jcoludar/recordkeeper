@@ -2,7 +2,7 @@
 
 **recordkeeper keeps your Claude Code sessions on track.** It orients your
 agent at the start and leaves an honest, accurately-timestamped record at the
-end — so it always knows what you're doing and where you're going. That works
+end — so it can stay oriented on what you're doing and where you're going. That works
 out of the box and can never wedge a session; turn the dial up and an opt-in
 gate won't let a session close until its record checks out.
 
@@ -39,7 +39,8 @@ write nothing.
 - **Timestamps you can trust.** `started_at:` is written when you begin;
   `ended_at:` is stamped by the harness at `SessionEnd`, not guessed by the model
   after the fact.
-- **No runtime dependency.** Python + PyYAML, no npm, no service to run.
+- **No runtime dependency.** The plugin core is pure-Python stdlib — no PyYAML, no
+  npm, no service to run. (PyYAML is needed only by the opt-in enforcement layer.)
 
 ## Turn it up: blocking enforcement (opt-in)
 

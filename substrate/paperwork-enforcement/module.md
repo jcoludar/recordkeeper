@@ -12,7 +12,7 @@ summary: Blocking Stop-hook + rule engine that enforces a project's paperwork co
 
 ## When to opt in
 
-When the project has committed to a paperwork contract — session logs with specific frontmatter, cross-document consistency rules, conditional handoff requirements — and wants those rules machine-checked at every Stop event, not left to discipline. Pair with `session-paperwork` (required dependency); this substrate enforces what that one describes.
+When a project has committed to a paperwork contract — session logs with specific frontmatter, cross-document consistency rules, conditional handoff requirements — and wants it machine-checked at every Stop, not left to discipline. Requires `session-paperwork`; this substrate enforces what that one describes.
 
 ## What this substrate deploys
 
@@ -20,7 +20,7 @@ When the project has committed to a paperwork contract — session logs with spe
 - `stop_paperwork_check.py` — BLOCKING Stop hook. Loads `.claude/paperwork.yaml`, runs all configured rules, exits 0 silently on pass or 2 with a structured stderr report on fail.
 - Six `_paperwork_*` helper modules (session log reader, edit log JSONL, config loader/validator, token interpolation, predicates, rule engine) deployed alongside the hooks.
 
-The substrate becomes active only when the project also writes `.claude/paperwork.yaml`. Without that config, both hooks are no-ops.
+Both hooks stay no-ops until the project writes `.claude/paperwork.yaml`.
 
 ## The `.claude/paperwork.yaml` contract
 
@@ -43,18 +43,18 @@ consistency:                     # list of cross-document rules
     must-also-appear-in: ["TECHNICAL_DEBT.md"]
 ```
 
-**Interpolation tokens** (expanded in every string value): `{today}` (today's date), `{session-slug}` (from the in-flight log's `slug:` field), `{session-date}` (the in-flight log's *own* date, from its filename prefix — use it instead of `{today}` in the session-log path/`date:` so a session spanning midnight, whose log is dated yesterday, is checked against its real date).
+**Interpolation tokens** (expanded in every string value): `{today}` (today's date), `{session-slug}` (the in-flight log's `slug:`), `{session-date}` (the log's *own* date from its filename prefix — use it over `{today}` in the session-log path/`date:` so a log spanning midnight is still checked against its real date).
 
 **Predicate vocabulary v1:**
 - `must-exist: <bool>` — at least one (or zero) matched files.
 - `must-be-modified-this-session: <bool>` — matched file(s) appear in this session's edit log.
 - `frontmatter.<field>: {required, equals, in, matches}` — field-by-field assertions.
 - `when.when-files-modified-matching: <glob>` — gate a file rule on edit-log activity.
-- `when.when-frontmatter: {<field>: <value-or-list>}` — gate a file rule on the in-flight session log's frontmatter (its "session phase"). The rule runs only when that field's value is in the given set. Multiple `when.*` sub-conditions combine with **AND**.
-- `tier: <1|2>` — rule severity, on any file or consistency rule. Tier 1 (default) blocks the Stop; tier 2 is surfaced as a non-blocking advisory ("deferred"). Lets a project distinguish "must fix before next session" from "track but don't block".
+- `when.when-frontmatter: {<field>: <value-or-list>}` — gate a file rule on the in-flight log's frontmatter (its "session phase"): the rule runs only when that field's value is in the given set. Multiple `when.*` sub-conditions combine with **AND**.
+- `tier: <1|2>` — rule severity, on any file or consistency rule. Tier 1 (default) blocks the Stop; tier 2 surfaces as a non-blocking advisory ("deferred") — "track but don't block".
 
-**Status-conditional enforcement (recommended session-log shape).** Split the session-log checks into two `files:` entries on the same path: Entry 1 (always) asserts the *creation* contract `/begin-session` fills (`date`/`slug`/`started_at` + `status: {in: [done, paused, in_progress]}`); Entry 2, gated by `when.when-frontmatter: {status: [done, paused]}`, asserts the *debrief* contract (`followups`/`topics`/`areas`). This way a freshly-begun `in_progress` log yields cleanly while the closing checklist is hard-enforced the instant `/debrief` flips `status` to terminal. (Without this split, the first Stop after every `/begin-session` blocks, since an `in_progress` log has no debrief fields yet.)
-- `consistency` — for each regex capture in source body, the literal capture must appear in every listed target file (or in at least one match of a glob target). The `find:` regex is validated at config load (must compile; at most one capturing group).
+**Status-conditional enforcement (recommended session-log shape).** Split the session-log checks into two `files:` entries on the same path: Entry 1 (always) asserts the *creation* contract `/begin-session` fills (`date`/`slug`/`started_at` + `status: {in: [done, paused, in_progress]}`); Entry 2, gated by `when.when-frontmatter: {status: [done, paused]}`, asserts the *debrief* contract (e.g. `followups`). A freshly-begun `in_progress` log then passes, while the closing checklist arms the instant `/debrief` flips `status` to terminal. (Without the split, the first Stop after every `/begin-session` blocks, since an `in_progress` log has no debrief fields yet.)
+- `consistency` — each regex capture in a source body must appear literally in every listed target file (or in at least one match of a glob target). The `find:` regex is validated at config load (must compile; at most one capturing group).
 
 See `paperwork.yaml.example` shipped with this substrate for a fully-annotated template.
 
@@ -68,11 +68,11 @@ Every Stop event:
 5. Walk every `files:` and `consistency:` rule; collect every failure.
 6. Exit 0 silent on pass. Any tier-1 failure → exit 2 with `paperwork-enforcement: N rule(s) failed.` + grouped reasons. Tier-2-only failures → exit 0 with a non-blocking advisory.
 
-Failed Stop blocks the session from ending. Fix each item, end session again — fresh evaluation, no cached state.
+A failed Stop blocks the session; fix each item and end again — fresh evaluation, no cached state.
 
 ## Substrate-wide invariant: real timestamps only
 
-Every timestamp the substrate writes (PostToolUse edit log `ts:`, `{today}` interpolation) comes from `datetime.now(tz=local)` or `date.today()` at moment of capture. Never derived, never reconstructed. This invariant is load-bearing for any time-window predicate the rule engine ever grows.
+Every timestamp the substrate writes (PostToolUse edit log `ts:`, `{today}` interpolation) comes from `datetime.now(tz=local)` / `date.today()` at capture — never derived or reconstructed. This invariant is load-bearing for any future time-window predicate.
 
 ## Validation CLI
 
@@ -80,4 +80,4 @@ Every timestamp the substrate writes (PostToolUse edit log `ts:`, `{today}` inte
 
 ## Out of scope (intentional)
 
-Project-specific interpolation tokens beyond `{today}` / `{session-slug}` / `{session-date}` (no `{ticket-id}` etc. — those need pluggable extractors, a future substrate). Tag-based `when:` conditions. Time-window predicates. Auto-fix mode (substrate reports, never edits). (A session log spanning midnight is handled via `{session-date}`, which resolves against the log's own date.)
+Project-specific interpolation tokens beyond `{today}` / `{session-slug}` / `{session-date}` (no `{ticket-id}` etc. — those need pluggable extractors, a future substrate). Tag-based `when:` conditions. Time-window predicates. Auto-fix mode (the substrate reports, never edits).

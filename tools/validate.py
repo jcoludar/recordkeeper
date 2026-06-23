@@ -16,6 +16,9 @@ class ValidationError(Exception):
 
 # Substrate modules use a leaner schema; tier-1/tier-2 modules must carry the
 # full 8-field convention (the three list fields can be empty, but must be present).
+# Substrate module.md files are also reference-length (a whole substrate's contract,
+# predicate vocabulary, and enforcement flow), so they get their own, looser
+# per_substrate_module_words budget rather than the tier per_module_words budget.
 REQUIRED_MODULE_FIELDS = {"id", "name", "tier", "default", "summary"}
 REQUIRED_TIER_MODULE_FIELDS = REQUIRED_MODULE_FIELDS | {
     "applies_when",
@@ -190,7 +193,11 @@ def main(argv: list[str] | None = None) -> int:
     # Read per-module budget from VERSION.
     version_text = (root / "VERSION").read_text()
     version_fm, _ = parse_frontmatter(version_text)
-    per_module = int(version_fm.get("length_budget", {}).get("per_module_words", 600))
+    length_budget = version_fm.get("length_budget", {})
+    per_module = int(length_budget.get("per_module_words", 600))
+    # Substrate module.md docs are reference-length (whole-substrate contracts), longer
+    # than tier-1/tier-2 principle modules; fall back to per_module if unset.
+    per_substrate_module = int(length_budget.get("per_substrate_module_words", per_module))
 
     errors: list[str] = []
 
@@ -211,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
             mod = sub_dir / "module.md"
             if mod.is_file():
                 try:
-                    validate_module(mod, masterbook_root=root, max_words=per_module)
+                    validate_module(mod, masterbook_root=root, max_words=per_substrate_module)
                 except ValidationError as exc:
                     errors.append(str(exc))
 

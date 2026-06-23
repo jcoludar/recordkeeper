@@ -315,3 +315,61 @@ def test_validate_commands_description_101_chars_fails(mini_masterbook):
     cmd.write_text(f"---\ndescription: {'a' * 101}\n---\n\nBody.\n")
     with pytest.raises(ValidationError, match="100 chars"):
         validate_commands(mini_masterbook)
+
+
+def _write_budget_version(root, *, per_module, per_substrate):
+    (root / "VERSION").write_text(
+        "---\nversion: 0.0.0\nlength_budget:\n"
+        f"  global_words: 4000\n  per_module_words: {per_module}\n"
+        f"  per_substrate_module_words: {per_substrate}\n---\n"
+    )
+
+
+def _write_index_tier_only(root):
+    (root / "INDEX.md").write_text(
+        "# INDEX\n\n"
+        "- [tier-1/example](tier-1/example.md)\n"
+        "- [tier-2/optional](tier-2/optional.md)\n"
+    )
+
+
+def test_validate_cli_substrate_module_gets_higher_budget(mini_masterbook):
+    """A substrate module.md over the tier per_module_words but under
+    per_substrate_module_words passes — substrate docs get the looser budget."""
+    _write_budget_version(mini_masterbook, per_module=50, per_substrate=200)
+    sub = mini_masterbook / "substrate" / "wordy"
+    sub.mkdir(parents=True)
+    body = "word " * 120  # > tier per_module (50), < per_substrate (200)
+    (sub / "module.md").write_text(
+        "---\nid: substrate/wordy\nname: Wordy\ntier: substrate\ndefault: false\n"
+        "summary: a wordy substrate\n---\n\n" + body + "\n"
+    )
+    _write_index_tier_only(mini_masterbook)
+    result = subprocess.run(
+        [sys.executable, str(VALIDATE), str(mini_masterbook)],
+        cwd=str(Path(__file__).resolve().parents[1]),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_validate_cli_substrate_module_over_substrate_budget_fails(mini_masterbook):
+    """A substrate module.md above per_substrate_module_words still fails."""
+    _write_budget_version(mini_masterbook, per_module=50, per_substrate=200)
+    sub = mini_masterbook / "substrate" / "toolong"
+    sub.mkdir(parents=True)
+    body = "word " * 250  # > per_substrate (200)
+    (sub / "module.md").write_text(
+        "---\nid: substrate/toolong\nname: Too Long\ntier: substrate\ndefault: false\n"
+        "summary: an over-budget substrate\n---\n\n" + body + "\n"
+    )
+    _write_index_tier_only(mini_masterbook)
+    result = subprocess.run(
+        [sys.executable, str(VALIDATE), str(mini_masterbook)],
+        cwd=str(Path(__file__).resolve().parents[1]),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "exceeds" in (result.stderr + result.stdout)
