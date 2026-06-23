@@ -5,6 +5,9 @@ __pycache__/
 .venv/
 .DS_Store
 
+# local triage scratch (incoming requests from consuming projects); never shipped
+INBOX.md
+
 # example project: assembler outputs (regenerate with `tools/assemble.py . examples/minimal-project`)
 examples/minimal-project/CLAUDE.md
 examples/minimal-project/AGENTS.md
