@@ -2,6 +2,30 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## v0.2.5 — 2026-06-23
+
+### Added
+- **Status-conditional enforcement (`when-frontmatter`).** `paperwork.yaml` `when:` clauses can now
+  gate a rule on the in-flight session log's frontmatter (e.g. `when-frontmatter: {status: [done, paused]}`),
+  combining with `when-files-modified-matching` via AND. This enables the recommended **two-entry
+  session-log split** — a creation contract that always applies plus a debrief contract that arms only
+  once the log declares it is closing.
+
+### Fixed
+- **No more false-block on the first Stop after `/begin-session`.** A single session-log rule asserting
+  the debrief fields fired against a freshly-created `in_progress` log and blocked the Stop once. The
+  two-entry split (above) lets the `in_progress` log pass while the debrief contract is enforced the
+  moment `status` goes terminal. The bundled `paperwork.yaml.example` now shows the split.
+
+### Changed
+- **README/quickstart/plugin re-pitched** around "keeps your Claude Code sessions on track": the
+  always-on core (orient + honest, timestamped record) leads; the opt-in enforcement gate is the
+  "won't close until the record checks out" upgrade. README now lists the shipped `session-manifest`
+  substrate (no longer mis-filed as "planned").
+
+### Notes
+- v0.2.3 was intentionally skipped (0.2.2 → 0.2.4 in a prior release).
+
 ## v0.2.4 — 2026-06-13
 
 ### Changed

@@ -1,6 +1,6 @@
 # Concepts
 
-Three terms recur across recordkeeper's documentation. Knowing them lets the rest of the docs read fast.
+A few terms recur across recordkeeper's documentation. Knowing them lets the rest of the docs read fast.
 
 ## Substrate
 
@@ -15,6 +15,12 @@ The unit of reuse is the substrate. Adding a substrate to a project is a one-lin
 The **assembler** is `tools/assemble.py`. It takes two positional arguments: the recordkeeper repo root and the target project directory. It reads `<project>/CLAUDE.source.md`, picks substrates listed under `masterbook.substrates:`, and writes the project's `CLAUDE.md` plus a populated `.claude/` directory.
 
 The assembler is the only build step. After it runs, the target project has no runtime dependency on recordkeeper — the hooks and commands live inside `.claude/` and execute via the Claude Code harness.
+
+## Session manifest
+
+The **session manifest** is what the `session-manifest` substrate maintains: a small layer of machine-trustworthy state on top of session-paperwork's hand-editable logs. It tracks an authoritative in-flight pointer (which log is the current session), assigns each session a monotonic `session_no`, generates a `sessions/INDEX.md`, and surfaces unclosed ("ghost") sessions that were never debriefed.
+
+It is **non-blocking** — a recorder that fails open, owning the machine state and refreshing it every turn without ever gating a Stop. It requires the `session-paperwork` substrate. (The authoritative list of shipped substrates lives in [`INDEX.md`](../INDEX.md).)
 
 ## Blocking enforcement
 
