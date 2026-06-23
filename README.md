@@ -1,13 +1,14 @@
 # recordkeeper
 
-**Honest session records for Claude Code: orient at the start, run a checklist at
-the end, get end-times you can trust. It records by default — and enforces the moment
-you ask it to.**
+**recordkeeper keeps your Claude Code sessions on track.** It orients your
+agent at the start and leaves an honest, accurately-timestamped record at the
+end — so it always knows what you're doing and where you're going. That works
+out of the box and can never wedge a session; turn the dial up and an opt-in
+gate won't let a session close until its record checks out.
 
-Most Claude Code add-ons give the model more capability. recordkeeper gives it
-*memory and discipline*: every working session leaves a dated log with reliable
-timestamps, written without you having to think about it — and, when a project wants
-it, paperwork a session literally cannot close without.
+Beyond that plugin core, the assembler composes a blocking enforcement gate
+and a session-manifest layer today, with richer plugin-native layers on the
+way — see below.
 
 ## Install (Claude Code plugin)
 
@@ -88,12 +89,18 @@ a session log → the Stop hook blocks. Done.
 - **`substrate/paperwork-enforcement/`** — the *blocking* Stop hook driven by a
   declarative `paperwork.yaml`. Predicates: file existence, frontmatter validation,
   edit-log filtering, cross-document consistency.
+- **`substrate/session-manifest/`** — machine-trustworthy session lifecycle on
+  top of session-paperwork: an authoritative in-flight pointer, a monotonic
+  `session_no`, a generated `sessions/INDEX.md`, and unclosed ("ghost") sessions
+  surfaced — without giving up hand-editable logs. Non-blocking (a recorder that
+  fails open). Requires `session-paperwork`.
 - **`tools/assemble.py`** — composes selected substrates into a project's
   `CLAUDE.md` and `.claude/`. Takes two positional args: the recordkeeper repo root
   and the target project directory.
 
-Richer plugin-native layers (a plugin-native gate, a session manifest, guard dials,
-human-only sentinels, multi-session orchestration) are planned for later releases.
+Richer plugin-native layers (a plugin-native gate, a plugin-native session
+manifest, guard dials, human-only sentinels, multi-session orchestration) are
+planned for later releases.
 
 If you're authoring your own hooks, read [`PARKING_LOT.md`](./PARKING_LOT.md) first —
 it documents hard-won Anthropic hook-contract gotchas plus other
