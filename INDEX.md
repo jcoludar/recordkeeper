@@ -1,6 +1,6 @@
 # recordkeeper — module index
 
-This index is the contract `tools/validate.py` checks: every module listed here must exist on disk; every module on disk under `tier-1/` should appear here.
+`tools/validate.py` checks one index contract: every **tier-1 and tier-2** module on disk must be linked here, and every tier-1/tier-2 link here must resolve to a module on disk (no orphans). The substrates, helpers, and tools below are listed for navigation — they carry their own frontmatter, validated separately, and are **not** index-membership-checked.
 
 ## Substrates
 
