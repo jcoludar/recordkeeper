@@ -35,7 +35,17 @@ Every loose end the next session needs to know about goes in `followups:` (a YAM
 
 ## 4. Blockers surfaced
 
-If anything blocks the next session (failing test, env issue, unresolved decision), it appears in `followups:`.
+If anything blocks the next session (failing test, env issue, unresolved decision), it appears in `followups:` AND in the project's blocker tracker if one exists.
+
+## 5. Write the handoff
+
+Add a `## Handoff` section to the *bottom* of this session's log — the next session reads it cold:
+
+- **State at close.** Where things stand (branch, what's built/parked, suite status).
+- **Next.** The first thing the next session should do.
+- **Blockers.** Anything that must resolve first (also in `followups:`).
+
+This *is* the handoff. Do not create a separate handoff file — the session log is the single source of truth.
 
 ## On `ended_at:`
 

@@ -2,6 +2,22 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## v0.2.6 — 2026-06-24
+
+### Fixed
+- **Plugin command parity.** The plugin's top-level `commands/begin-session.md` and `commands/debrief.md`
+  had drifted from `substrate/session-paperwork/commands/` since v0.2.4: the structured `## Handoff`
+  section and unclosed-session ("ghost") detection had landed only in the substrate copies, so the plugin
+  core shipped a lighter handoff for two releases. The plugin commands are now at parity — `/debrief`
+  writes a structured `## Handoff` (state-at-close · next · blockers) and `/begin-session` reads it cold
+  and surfaces an unclosed prior session. The one intentional difference remains: the plugin stamps
+  `ended_at:` on `SessionEnd`, the substrate on `Stop`.
+
+### Added
+- **README "Plugin or assembler?" chooser.** A short section orienting new users to the two install
+  paths — the non-blocking plugin core vs. the assembler's `session-manifest` layer and blocking
+  enforcement gate.
+
 ## v0.2.5 — 2026-06-23
 
 ### Added

@@ -1,5 +1,5 @@
 ---
-version: 0.2.5
+version: 0.2.6
 length_budget:
   global_words: 4000
   per_module_words: 600

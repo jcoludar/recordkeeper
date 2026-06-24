@@ -10,6 +10,26 @@ Beyond that plugin core, the assembler composes a blocking enforcement gate
 and a session-manifest layer today, with richer plugin-native layers on the
 way — see below.
 
+## Plugin or assembler?
+
+Same product, two install paths:
+
+- **Plugin** (two commands, below) — oriented starts, the `/begin-session` ↔
+  `/debrief` loop with a structured `## Handoff` the next session reads cold, and
+  honest `ended_at:` stamping. Zero config, no dependencies, and it can never block
+  a session.
+- **Assembler** with `substrates: [session-paperwork, session-manifest]` —
+  everything the plugin does, plus a machine-trustworthy session lifecycle: a
+  monotonic `session_no`, a generated `sessions/INDEX.md`, and unclosed-session
+  detection. Still non-blocking.
+- **Assembler + `paperwork-enforcement`** — adds the blocking Stop gate that won't
+  let a session close until its record checks out (frontmatter present, findings
+  mirrored into your tracking docs, changelogs in sync).
+
+Rule of thumb: install the plugin to try it; reach for the assembler when you want a
+durable session index or machine-enforced discipline. Coders and researchers
+juggling many repos usually want the assembler's session layer.
+
 ## Install (Claude Code plugin)
 
 ```bash

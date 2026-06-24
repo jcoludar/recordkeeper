@@ -8,10 +8,15 @@ Run before doing task work for the session. Sets up context, intent, and the ses
 
 ## 1. Read the previous session's log
 
-Open the most recent file in `sessions/`. Note:
+Open the most recent file in `sessions/`. Read its `## Handoff` (state-at-close · next · blockers)
+first — it was written for exactly this moment — then note:
 - **Status.** If the prior session is `paused` or `in_progress`, address that first.
 - **Follow-ups.** Which apply today? Surface any blockers to the user.
 - **Decisions worth remembering.** Patterns the prior session validated.
+
+**If the most recent log is still `in_progress` (an unclosed prior session)**, surface it to the user —
+"the previous session (`<slug>`) didn't close cleanly; here's its handoff/followups" — and OFFER to
+close it. NEVER silently rewrite or auto-close another session's record; closing it is the user's call.
 
 (If this is the first session in the project, skip this step.)
 
@@ -23,7 +28,7 @@ If the project maintains a priorities file (`OVERVIEW.md`, `NOW.md`, etc.), read
 
 State to the user what you intend to do this session. Examples:
 - "Focus: finish T6 fix from yesterday."
-- "Open-ended: user wants to discuss design before any code."
+- "Open-ended: user wants to discuss the design before any code."
 
 This declaration anchors the session — `/debrief` later checks: did we do what we said?
 
