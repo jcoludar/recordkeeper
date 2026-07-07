@@ -1,4 +1,10 @@
-"""Self-validate the recordkeeper tree."""
+"""Self-validate the recordkeeper tree.
+
+Every check returns a `list[str]` of problems (empty == clean) rather than raising
+on the first fault. This is deliberate: a fail-fast validator masks latent failures
+behind whichever one it hits first, so real problems get peeled off one run at a
+time. Collecting all faults means one run gives the whole health picture.
+"""
 from __future__ import annotations
 
 import re
@@ -8,10 +14,6 @@ from pathlib import Path
 # Reuse parse_frontmatter from assemble.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from assemble import parse_frontmatter, FrontmatterError, _module_id
-
-
-class ValidationError(Exception):
-    """Raised by validators when a check fails."""
 
 
 # Substrate modules use a leaner schema; tier-1/tier-2 modules must carry the
@@ -33,34 +35,40 @@ def validate_module(
     masterbook_root: Path,
     max_words: int,
     required_fields: set[str] = REQUIRED_MODULE_FIELDS,
-) -> None:
+) -> list[str]:
     """Frontmatter parses; required fields present; id matches path; length under budget."""
     try:
         fm, body = parse_frontmatter(path.read_text())
     except FrontmatterError as exc:
-        raise ValidationError(f"{path}: {exc}") from exc
+        # Nothing else is checkable without frontmatter.
+        return [f"{path}: {exc}"]
+
+    errors: list[str] = []
 
     missing = required_fields - set(fm)
     if missing:
-        raise ValidationError(f"{path}: missing required frontmatter fields: {sorted(missing)}")
+        errors.append(f"{path}: missing required frontmatter fields: {sorted(missing)}")
 
-    expected_id = _module_id(path, masterbook_root)
-    if fm["id"] != expected_id:
-        raise ValidationError(f"{path}: id '{fm['id']}' does not match path '{expected_id}'")
+    if "id" in fm:
+        expected_id = _module_id(path, masterbook_root)
+        if fm["id"] != expected_id:
+            errors.append(f"{path}: id '{fm['id']}' does not match path '{expected_id}'")
 
     n = len(body.split())
     if n > max_words:
-        raise ValidationError(f"{path}: body is {n} words; exceeds per-module budget of {max_words}")
+        errors.append(f"{path}: body is {n} words; exceeds per-module budget of {max_words}")
+
+    return errors
 
 
 _INDEX_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 
-def validate_index(masterbook_root: Path) -> None:
+def validate_index(masterbook_root: Path) -> list[str]:
     """INDEX.md references every module file and no orphans."""
     index = masterbook_root / "INDEX.md"
     if not index.is_file():
-        raise ValidationError(f"INDEX.md not found at {index}")
+        return [f"INDEX.md not found at {index}"]
 
     text = index.read_text()
     # Strip any `#fragment` (and `?query`) before removing the `.md` suffix, or a
@@ -75,21 +83,25 @@ def validate_index(masterbook_root: Path) -> None:
         for p in (masterbook_root / tier_dir).glob("*.md"):
             actual.add(f"{tier_dir}/{p.stem}")
 
+    errors: list[str] = []
+
     missing = actual - referenced
     if missing:
-        raise ValidationError(f"INDEX missing references: {sorted(missing)}")
+        errors.append(f"INDEX missing references: {sorted(missing)}")
 
     orphans = referenced - actual - {"parking-lot"}
     orphans = {o for o in orphans if o.startswith(("tier-1/", "tier-2/"))}
     if orphans:
-        raise ValidationError(f"INDEX has orphan references: {sorted(orphans)}")
+        errors.append(f"INDEX has orphan references: {sorted(orphans)}")
+
+    return errors
 
 
 import ast
 import json
 
 
-def validate_settings_fragments(masterbook_root: Path) -> None:
+def validate_settings_fragments(masterbook_root: Path) -> list[str]:
     """Top-level settings-fragments/*.json AND substrate/*/settings-fragment.json parse as JSON."""
     candidates: list[Path] = []
     frag_dir = masterbook_root / "settings-fragments"
@@ -102,14 +114,16 @@ def validate_settings_fragments(masterbook_root: Path) -> None:
                 frag = sub_dir / "settings-fragment.json"
                 if frag.is_file():
                     candidates.append(frag)
-    for p in candidates:
+    errors: list[str] = []
+    for p in sorted(candidates):
         try:
             json.loads(p.read_text())
         except json.JSONDecodeError as exc:
-            raise ValidationError(f"{p}: invalid JSON: {exc}") from exc
+            errors.append(f"{p}: invalid JSON: {exc}")
+    return errors
 
 
-def validate_hooks(masterbook_root: Path) -> None:
+def validate_hooks(masterbook_root: Path) -> list[str]:
     """Each .py file under baseline-hooks/, hooks/, and substrate/*/hooks/ parses with `ast.parse`.
 
     `baseline-hooks/` is the assembler's always-on hook source; `hooks/` is the
@@ -127,17 +141,19 @@ def validate_hooks(masterbook_root: Path) -> None:
                 sub_hooks = sub_dir / "hooks"
                 if sub_hooks.is_dir():
                     candidates.extend(sub_hooks.glob("*.py"))
-    for p in candidates:
+    errors: list[str] = []
+    for p in sorted(candidates):
         try:
             ast.parse(p.read_text())
         except SyntaxError as exc:
-            raise ValidationError(f"{p}: syntax error: {exc}") from exc
+            errors.append(f"{p}: syntax error: {exc}")
+    return errors
 
 
 _COMMAND_FILENAME_RE = re.compile(r"^[a-z][a-z0-9-]*\.md$")
 
 
-def validate_commands(masterbook_root: Path) -> None:
+def validate_commands(masterbook_root: Path) -> list[str]:
     """Each .md under commands/ and substrate/*/commands/ has well-formed frontmatter.
 
     Requirements per command file:
@@ -157,27 +173,28 @@ def validate_commands(masterbook_root: Path) -> None:
                 if sub_cmds.is_dir():
                     candidates.extend(sub_cmds.glob("*.md"))
 
-    for p in candidates:
+    errors: list[str] = []
+    for p in sorted(candidates):
         if not _COMMAND_FILENAME_RE.match(p.name):
-            raise ValidationError(
+            errors.append(
                 f"{p}: invalid filename '{p.name}' (must match [a-z][a-z0-9-]*\\.md)"
             )
+            continue
         try:
             fm, body = parse_frontmatter(p.read_text())
         except FrontmatterError as exc:
-            raise ValidationError(f"{p}: {exc}") from exc
+            errors.append(f"{p}: {exc}")
+            continue
         desc = fm.get("description")
-        if not isinstance(desc, str):
-            raise ValidationError(f"{p}: missing or empty `description:` frontmatter field")
+        if not isinstance(desc, str) or not desc.strip():
+            errors.append(f"{p}: missing or empty `description:` frontmatter field")
+            continue
         desc_clean = desc.strip()
-        if not desc_clean:
-            raise ValidationError(f"{p}: missing or empty `description:` frontmatter field")
         if "\n" in desc_clean or len(desc_clean) > 100:
-            raise ValidationError(
-                f"{p}: `description:` must be a single line, <= 100 chars"
-            )
+            errors.append(f"{p}: `description:` must be a single line, <= 100 chars")
         if not body.strip():
-            raise ValidationError(f"{p}: empty body")
+            errors.append(f"{p}: empty body")
+    return errors
 
 
 import argparse
@@ -203,13 +220,12 @@ def main(argv: list[str] | None = None) -> int:
 
     for tier_dir in ("tier-1", "tier-2"):
         for p in sorted((root / tier_dir).glob("*.md")):
-            try:
+            errors.extend(
                 validate_module(
                     p, masterbook_root=root, max_words=per_module,
                     required_fields=REQUIRED_TIER_MODULE_FIELDS,
                 )
-            except ValidationError as exc:
-                errors.append(str(exc))
+            )
 
     # Substrates are first-class modules with frontmatter; walk them too.
     substrate_root = root / "substrate"
@@ -217,30 +233,14 @@ def main(argv: list[str] | None = None) -> int:
         for sub_dir in sorted(p for p in substrate_root.iterdir() if p.is_dir()):
             mod = sub_dir / "module.md"
             if mod.is_file():
-                try:
+                errors.extend(
                     validate_module(mod, masterbook_root=root, max_words=per_substrate_module)
-                except ValidationError as exc:
-                    errors.append(str(exc))
+                )
 
-    try:
-        validate_index(root)
-    except ValidationError as exc:
-        errors.append(str(exc))
-
-    try:
-        validate_settings_fragments(root)
-    except ValidationError as exc:
-        errors.append(str(exc))
-
-    try:
-        validate_hooks(root)
-    except ValidationError as exc:
-        errors.append(str(exc))
-
-    try:
-        validate_commands(root)
-    except ValidationError as exc:
-        errors.append(str(exc))
+    errors.extend(validate_index(root))
+    errors.extend(validate_settings_fragments(root))
+    errors.extend(validate_hooks(root))
+    errors.extend(validate_commands(root))
 
     if errors:
         for e in errors:

@@ -2,7 +2,17 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
-## v0.2.6 — 2026-06-24
+## v0.2.7 — 2026-07-07
+
+### Changed
+- **`validate.py` now collects all faults in one pass instead of failing fast.** Each check
+  (`validate_module` / `validate_index` / `validate_settings_fragments` / `validate_hooks` /
+  `validate_commands`) previously raised on the first bad file, so latent faults hid behind whichever
+  one the run happened to hit first — real problems got peeled off one run at a time. Every check now
+  returns `list[str]` and `main()` prints one `VALIDATION ERROR:` line per fault, so a single run gives
+  the whole health picture. The `ValidationError` class is gone; the test suite moved to the
+  return-list contract and gained a regression test asserting two broken command files both surface in
+  one pass. No change to what counts as valid — only to how completely failures are reported.
 
 ### Fixed
 - **Plugin command parity.** The plugin's top-level `commands/begin-session.md` and `commands/debrief.md`

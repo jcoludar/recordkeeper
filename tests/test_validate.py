@@ -2,9 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
-from validate import validate_module, validate_index, ValidationError
+from validate import validate_module, validate_index
 
 
 def test_validate_module_ok(mini_masterbook):
@@ -16,9 +14,8 @@ def test_validate_module_id_path_mismatch(tmp_path):
     p = tmp_path / "tier-1" / "wrong.md"
     p.parent.mkdir(parents=True)
     p.write_text("---\nid: tier-1/different\nname: x\ntier: 1\ndefault: true\nsummary: y\n---\nbody\n")
-    with pytest.raises(ValidationError) as exc:
-        validate_module(p, masterbook_root=tmp_path, max_words=200)
-    assert "id" in str(exc.value)
+    errors = validate_module(p, masterbook_root=tmp_path, max_words=200)
+    assert any("id" in e for e in errors)
 
 
 def test_validate_module_too_long(tmp_path):
@@ -26,9 +23,8 @@ def test_validate_module_too_long(tmp_path):
     p.parent.mkdir(parents=True)
     body = "word " * 1000
     p.write_text(f"---\nid: tier-1/long\nname: x\ntier: 1\ndefault: true\nsummary: y\n---\n{body}\n")
-    with pytest.raises(ValidationError) as exc:
-        validate_module(p, masterbook_root=tmp_path, max_words=200)
-    assert "exceeds" in str(exc.value)
+    errors = validate_module(p, masterbook_root=tmp_path, max_words=200)
+    assert any("exceeds" in e for e in errors)
 
 
 def test_validate_module_tier_requires_full_field_set(tmp_path):
@@ -39,11 +35,11 @@ def test_validate_module_tier_requires_full_field_set(tmp_path):
     p.parent.mkdir(parents=True)
     # 5 fields only — missing applies_when / conflicts_with / requires.
     p.write_text("---\nid: tier-1/thin\nname: x\ntier: 1\ndefault: true\nsummary: y\n---\nbody\n")
-    with pytest.raises(ValidationError, match="missing required"):
-        validate_module(
-            p, masterbook_root=tmp_path, max_words=200,
-            required_fields=REQUIRED_TIER_MODULE_FIELDS,
-        )
+    errors = validate_module(
+        p, masterbook_root=tmp_path, max_words=200,
+        required_fields=REQUIRED_TIER_MODULE_FIELDS,
+    )
+    assert any("missing required" in e for e in errors)
 
 
 def test_validate_module_substrate_five_fields_ok(tmp_path):
@@ -80,9 +76,8 @@ def test_validate_index_ok(tmp_path, mini_masterbook):
 def test_validate_index_missing_reference(mini_masterbook):
     idx = mini_masterbook / "INDEX.md"
     idx.write_text("# INDEX\n\n- [tier-1/example](tier-1/example.md)\n")
-    with pytest.raises(ValidationError) as exc:
-        validate_index(mini_masterbook)
-    assert "tier-2/optional" in str(exc.value)
+    errors = validate_index(mini_masterbook)
+    assert any("tier-2/optional" in e for e in errors)
 
 
 def test_validate_index_orphan_reference(mini_masterbook):
@@ -93,9 +88,8 @@ def test_validate_index_orphan_reference(mini_masterbook):
         "- [tier-2/optional](tier-2/optional.md)\n"
         "- [tier-1/ghost](tier-1/ghost.md)\n"
     )
-    with pytest.raises(ValidationError) as exc:
-        validate_index(mini_masterbook)
-    assert "ghost" in str(exc.value)
+    errors = validate_index(mini_masterbook)
+    assert any("ghost" in e for e in errors)
 
 
 from validate import validate_settings_fragments, validate_hooks, validate_commands
@@ -108,8 +102,8 @@ def test_validate_settings_fragments_ok(mini_masterbook):
 def test_validate_settings_fragments_bad_json(mini_masterbook):
     bad = mini_masterbook / "settings-fragments" / "bad.json"
     bad.write_text("{not valid json")
-    with pytest.raises(ValidationError):
-        validate_settings_fragments(mini_masterbook)
+    errors = validate_settings_fragments(mini_masterbook)
+    assert any("invalid JSON" in e for e in errors)
 
 
 def test_validate_hooks_ok(mini_masterbook):
@@ -123,8 +117,8 @@ def test_validate_hooks_bad_syntax(mini_masterbook):
     h = mini_masterbook / "hooks"
     h.mkdir(exist_ok=True)
     (h / "bad.py").write_text("def broken(:\n")
-    with pytest.raises(ValidationError):
-        validate_hooks(mini_masterbook)
+    errors = validate_hooks(mini_masterbook)
+    assert any("syntax error" in e for e in errors)
 
 
 VALIDATE = Path(__file__).resolve().parent.parent / "tools" / "validate.py"
@@ -228,8 +222,8 @@ def test_validate_hooks_walks_substrate(mini_masterbook):
     sub_hooks = mini_masterbook / "substrate" / "demo-sub" / "hooks"
     sub_hooks.mkdir(parents=True)
     (sub_hooks / "bad.py").write_text("def broken(:\n")
-    with pytest.raises(ValidationError):
-        validate_hooks(mini_masterbook)
+    errors = validate_hooks(mini_masterbook)
+    assert any("syntax error" in e for e in errors)
 
 
 def test_validate_hooks_substrate_ok(mini_masterbook):
@@ -245,8 +239,8 @@ def test_validate_settings_fragments_walks_substrate(mini_masterbook):
     sub = mini_masterbook / "substrate" / "demo-sub"
     sub.mkdir(parents=True, exist_ok=True)
     (sub / "settings-fragment.json").write_text("{not valid json")
-    with pytest.raises(ValidationError):
-        validate_settings_fragments(mini_masterbook)
+    errors = validate_settings_fragments(mini_masterbook)
+    assert any("invalid JSON" in e for e in errors)
 
 
 def test_validate_settings_fragments_substrate_ok(mini_masterbook):
@@ -276,8 +270,8 @@ def test_validate_commands_missing_description(mini_masterbook):
     (sub_cmds / "bad.md").write_text(
         "---\nname: bad\n---\n\nBody.\n"
     )
-    with pytest.raises(ValidationError, match="description"):
-        validate_commands(mini_masterbook)
+    errors = validate_commands(mini_masterbook)
+    assert any("description" in e for e in errors)
 
 
 def test_validate_commands_empty_body(mini_masterbook):
@@ -287,8 +281,8 @@ def test_validate_commands_empty_body(mini_masterbook):
     (sub_cmds / "empty.md").write_text(
         "---\ndescription: a thing\n---\n\n"
     )
-    with pytest.raises(ValidationError, match="empty body"):
-        validate_commands(mini_masterbook)
+    errors = validate_commands(mini_masterbook)
+    assert any("empty body" in e for e in errors)
 
 
 def test_validate_commands_bad_filename(mini_masterbook):
@@ -298,8 +292,8 @@ def test_validate_commands_bad_filename(mini_masterbook):
     (sub_cmds / "Bad_Filename.md").write_text(
         "---\ndescription: x\n---\n\nBody.\n"
     )
-    with pytest.raises(ValidationError, match="filename"):
-        validate_commands(mini_masterbook)
+    errors = validate_commands(mini_masterbook)
+    assert any("filename" in e for e in errors)
 
 
 def test_validate_commands_description_exactly_100_chars(mini_masterbook):
@@ -313,8 +307,8 @@ def test_validate_commands_description_101_chars_fails(mini_masterbook):
     """A description with 101 chars is rejected."""
     cmd = mini_masterbook / "commands" / "toolong.md"
     cmd.write_text(f"---\ndescription: {'a' * 101}\n---\n\nBody.\n")
-    with pytest.raises(ValidationError, match="100 chars"):
-        validate_commands(mini_masterbook)
+    errors = validate_commands(mini_masterbook)
+    assert any("100 chars" in e for e in errors)
 
 
 def _write_budget_version(root, *, per_module, per_substrate):
@@ -373,3 +367,27 @@ def test_validate_cli_substrate_module_over_substrate_budget_fails(mini_masterbo
     )
     assert result.returncode != 0
     assert "exceeds" in (result.stderr + result.stdout)
+
+
+def test_validate_cli_reports_all_bad_commands_in_one_pass(mini_masterbook):
+    """No fail-fast: multiple broken command files are ALL reported in a single run.
+
+    Regression guard for the latent-failure-masking pathology — a validator that
+    stops at the first bad file hides the rest, so real problems get peeled off one
+    at a time across many runs instead of surfacing together.
+    """
+    _write_index_tier_only(mini_masterbook)
+    cmds = mini_masterbook / "commands"
+    cmds.mkdir(exist_ok=True)
+    (cmds / "alpha.md").write_text("no frontmatter at all\n")  # missing frontmatter
+    (cmds / "bravo.md").write_text(f"---\ndescription: {'a' * 101}\n---\n\nBody.\n")  # too long
+    result = subprocess.run(
+        [sys.executable, str(VALIDATE), str(mini_masterbook)],
+        cwd=str(Path(__file__).resolve().parents[1]),
+        capture_output=True,
+        text=True,
+    )
+    out = result.stderr + result.stdout
+    assert result.returncode != 0
+    assert "alpha.md" in out, "first bad command file should be reported"
+    assert "bravo.md" in out, "second bad command file must ALSO be reported (no fail-fast)"
