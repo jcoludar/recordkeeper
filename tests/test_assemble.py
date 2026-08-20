@@ -270,6 +270,92 @@ def test_merge_settings_substrate_fragment_also_contributes_permissions(mini_mas
     assert "Bash(custom *)" in out["permissions"]["allow"]
 
 
+# ── A generator may own what it generates. It may not own what it did not write. ────────────────
+# 🧨 MEASURED FAILURE, 2026-08-20. `settings.json` was written wholesale from substrate data with
+# NO READ of the existing file, so the documented deploy command DELETED every hook a consumer had
+# registered by hand. Running assemble.py to deploy an unrelated change removed three live hook
+# registrations; the exit code was 0 and the printed summary was unchanged.
+#
+# It is invisible from BOTH sides, which is why nothing was watching for it: the tool never loaded
+# the prior state, and a deleted registration is observationally identical to one that was never
+# added. The only symptom is that those hooks quietly stop firing.
+
+def _existing_with_local_hook(command="/proj/.claude/hooks/local.py", **extra):
+    entry = {"matcher": "Bash", "hooks": [{"type": "command", "command": command}]}
+    entry.update(extra)
+    return {"hooks": {"PreToolUse": [entry]}}
+
+
+def test_a_project_local_hook_SURVIVES_assembly(mini_masterbook):
+    out = merge_settings(
+        masterbook_root=mini_masterbook,
+        substrates=[],
+        permissions_extra=[],
+        existing=_existing_with_local_hook(),
+    )
+    cmds = [s["command"]
+            for e in out.get("hooks", {}).get("PreToolUse", [])
+            for s in e.get("hooks", [])]
+    assert "/proj/.claude/hooks/local.py" in cmds, "the generator deleted a hook it did not write"
+
+
+def test_an_unrecognised_field_on_a_preserved_hook_survives_VERBATIM(mini_masterbook):
+    """`timeout` and `statusMessage` are dropped by the normalisation applied to substrate hooks.
+    Applying that normalisation to a hook the tool does not own is the same defect one size
+    smaller — silently rewriting a field it does not understand."""
+    out = merge_settings(
+        masterbook_root=mini_masterbook,
+        substrates=[],
+        permissions_extra=[],
+        existing=_existing_with_local_hook(timeout=30, statusMessage="checking"),
+    )
+    kept = [e for e in out["hooks"]["PreToolUse"]
+            if any(s["command"].endswith("local.py") for s in e.get("hooks", []))]
+    assert kept and kept[0].get("timeout") == 30
+    assert kept[0].get("statusMessage") == "checking"
+
+
+def test_a_substrate_owned_hook_is_NOT_duplicated_by_preservation(mini_masterbook):
+    """The other direction. If preservation cannot tell substrate hooks from local ones, every
+    re-run doubles the file."""
+    (mini_masterbook / "settings-fragments" / "h.json").write_text(json.dumps({
+        "hooks": {"PreToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "/sub/owned.py"}]}]}
+    }))
+    existing = {"hooks": {"PreToolUse": [
+        {"matcher": "Bash", "hooks": [{"type": "command", "command": "/sub/owned.py"}]}]}}
+    out = merge_settings(
+        masterbook_root=mini_masterbook,
+        substrates=[],
+        permissions_extra=[],
+        existing=existing,
+    )
+    cmds = [s["command"]
+            for e in out["hooks"]["PreToolUse"] for s in e.get("hooks", [])]
+    assert cmds.count("/sub/owned.py") == 1
+
+
+def test_a_hand_added_permission_is_not_the_generators_to_delete(mini_masterbook):
+    out = merge_settings(
+        masterbook_root=mini_masterbook,
+        substrates=[],
+        permissions_extra=[],
+        existing={"permissions": {"allow": ["Bash(kubectl *)"]}},
+    )
+    assert "Bash(kubectl *)" in out["permissions"]["allow"]
+
+
+def test_existing_is_OPTIONAL_so_every_prior_caller_is_unaffected(mini_masterbook):
+    """The port must not change the no-`existing` contract: this is a published tool and other
+    callers exist outside this repo."""
+    a = merge_settings(masterbook_root=mini_masterbook, substrates=[], permissions_extra=[])
+    b = merge_settings(masterbook_root=mini_masterbook, substrates=[], permissions_extra=[],
+                       existing=None)
+    c = merge_settings(masterbook_root=mini_masterbook, substrates=[], permissions_extra=[],
+                       existing={})
+    assert a == b == c
+
+
 from assemble import emit_agents_md, deploy_commands
 
 

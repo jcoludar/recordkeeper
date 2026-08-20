@@ -2,6 +2,35 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## Unreleased
+
+### Fixed
+- **🧨 `assemble.py` deleted every hook a project had registered by hand.** `settings.json` was
+  written wholesale from substrate data with **no read of the existing file**, so the documented
+  deploy command silently removed any hook, and any `permissions.allow` rule, the consumer had added
+  themselves. Exit code 0, printed summary unchanged, and the only symptom was that those hooks
+  quietly stopped firing.
+
+  Measured 2026-08-20 in the development hub: running the assembler to deploy an *unrelated* change
+  removed three live hook registrations added by hand that afternoon. It is invisible from both
+  sides — the tool never loaded the prior state, and a deleted registration is observationally
+  identical to one that was never added — which is why nothing was watching for it.
+
+  `merge_settings()` now takes an optional `existing=` and carries over every hook entry and
+  allow-rule that no substrate produces. Preserved entries are copied **verbatim**, including
+  `timeout` and `statusMessage`, which the substrate-hook normalisation drops — a generator that
+  silently rewrites a field it does not understand is the same defect one size smaller. The
+  preservation is **printed**, because the whole failure was that it happened quietly. An
+  unparseable `settings.json` is now **refused rather than overwritten** (exit 2).
+
+  `existing=` defaults to `None`, so every caller written before this change is unaffected.
+
+  *A generator may own what it generates. It may not own what it did not write.*
+- **Plugin manifest version drift.** `.claude-plugin/plugin.json` still declared `0.2.6` after the
+  v0.2.7 release bumped `VERSION`, so `test_version_matches_manifest` had been failing on `main`
+  since that release. Synced to `0.2.7`. (Same shape as the v0.2.7 "plugin command parity" fix
+  below: a release step that updates one copy and not the other.)
+
 ## v0.2.7 — 2026-07-07
 
 ### Changed
