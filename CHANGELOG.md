@@ -2,6 +2,33 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## Unreleased
+
+### Fixed
+- **A stale `ended_at:` is now correctable — and only by a record.** `session_stop_log_timing.py`
+  considered only logs whose frontmatter had no `ended_at:` line, so a session that ran `/debrief`
+  (status → `done`, stamp written) and then kept working carried a **permanently wrong end time**.
+  The substrate whose stated purpose is curing end-time drift reintroduced it, silently.
+  The cause was one conflation: a single predicate answered both *"which log belongs to this
+  session?"* and *"may I write into it?"*, so the second question's answer silently rewrote the
+  first's — a closed log became **invisible**, which is indistinguishable from absent (hence the
+  symptom `no in-flight session log` rather than a refusal to overwrite).
+  Selection and authority are now separate. `select_log()` returns `(log, tier)` over three tiers of
+  evidence — the session-manifest **pointer**, the paperwork-enforcement **edit log**, then newest
+  **mtime** — and **only a record tier may correct a stamp already in the file.** The mtime tier may
+  still stamp an *open* log, never overwrite a committed value, and where it sees a stamp its own
+  mtime contradicts by more than two minutes it refuses and names both instants. A guess that
+  overwrites a record is worse than no correction: mtime reorders under a `git checkout` or a file-
+  sync with no session having run.
+  Adds 21 tests. No configuration change; projects running neither sibling substrate keep the
+  previous behaviour plus the advisory.
+
+### Known issue (pre-existing, not introduced here)
+- `.claude-plugin/plugin.json` still declares `0.2.6` while `VERSION` declares `0.2.7`, and
+  `tests/test_packaging_metadata.py::test_version_matches_manifest` fails on `main` because of it.
+  The v0.2.7 release bumped `VERSION` without the manifest. Left untouched: every version decision
+  is the maintainer's.
+
 ## v0.2.7 — 2026-07-07
 
 ### Changed
