@@ -2,6 +2,27 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## 0.2.9
+
+### Added
+- **`/begin-session` now carries the standing session shape (step 3b), so it stops living in the
+  operator's typing.** The budget and the cold-start standard — *work to roughly 400K tokens, then
+  close with a debrief sufficient to start a successor cold* — were being re-entered by hand into
+  the opening prompt of every session in every project. **A rule that survives only by being
+  re-typed is absent the first time someone is tired**, which makes it a property of one person's
+  patience rather than of the process.
+  Three things are stated rather than left to inference. It is a **default with a named override
+  path** (`unless the user says otherwise in this session's prompt`, and durably in a project's own
+  `CLAUDE.md`, where the override is visible) — a default that cannot be overridden is a mandate,
+  and the point is that the common case stops being *stated*, not that the rare case is lost. It is
+  a **ceiling on running long and not a floor on stopping short**: a written number becomes a
+  target, and a session padded to reach it manufactures exactly the low-value tail the cold-start
+  standard exists to prevent. And **"enough to start a successor COLD"** is named as the acceptance
+  test for the closing ritual, which is what makes a debrief checkable at all rather than a
+  checklist of sections that can each be present and useless.
+  Adds 4 tests. No configuration change; projects that want a different budget override it in their
+  own `CLAUDE.md`.
+
 ## Unreleased
 
 ### Fixed
