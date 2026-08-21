@@ -23,11 +23,39 @@ All notable changes to recordkeeper will be documented in this file.
   Adds 21 tests. No configuration change; projects running neither sibling substrate keep the
   previous behaviour plus the advisory.
 
-### Known issue (pre-existing, not introduced here)
-- `.claude-plugin/plugin.json` still declares `0.2.6` while `VERSION` declares `0.2.7`, and
-  `tests/test_packaging_metadata.py::test_version_matches_manifest` fails on `main` because of it.
-  The v0.2.7 release bumped `VERSION` without the manifest. Left untouched: every version decision
-  is the maintainer's.
+- **The `SessionEnd` core stamper now refuses two things it used to do silently.** `hooks/
+  session_end_stamp.py` selects by **newest mtime**, which is a guess: it cannot tell whose log it
+  is looking at. It had no bound on that guess, and both failures below were found by other
+  projects running this hook and having to chase where a timestamp came from.
+  - **An `in_progress` log is no longer stamped.** Measured: a log received
+    `ended_at: 22:52:51` while `status:` still read `in_progress` and its session ran 13 minutes
+    longer. A missing `status:` is refused too — absence is not consent.
+    ⚠ **`paused` remains stampable, deliberately.** `SessionEnd` fires *once*, at true session end,
+    so a paused session really did end and its end time is real. This is **not** the Stop hook's
+    `status == "done"` rule: `Stop` fires at every assistant stop and must be stricter. Copying that
+    rule here would make the hook silently inert for every paused session.
+  - **A log this session plainly did not write is no longer stamped.** When a *new* session ends in
+    a repo still holding an *older* unstamped log, the old log used to get today's wall clock.
+    Measured in a peer project: a log whose session ran 05:12→05:44 was stamped **09:42:55** by a
+    different session that ended four hours later. A log this session closed was written seconds
+    ago, so the hook now refuses one untouched for more than `STALE_TOLERANCE_SECONDS` (30 min).
+  - Both refusals **print their reason**; a hook that declines in silence is indistinguishable from
+    one that is not installed, which is exactly the confusion that made this take a morning to
+    diagnose.
+  - ⚠ **Stated bound:** recency cannot separate two *concurrent* sessions in one project — both
+    write recently and mtime cannot attribute either. Fixing that needs a record, not a better
+    guess. Adds 6 tests; 7 of 7 mutants killed.
+  - ⛔ **Correction to the report that prompted this:** the hook was described for several weeks as
+    *"overwriting committed values."* It never could — it selects only logs lacking `ended_at:` and
+    has no `replace_ended_at`. It **fabricates a stamp into an empty field**, which is a different
+    defect and, on a repo with no correcting Stop hook, a permanent one.
+
+### Fixed — packaging
+- `.claude-plugin/plugin.json` declared `0.2.6` while `VERSION` declared `0.2.7`, and
+  `tests/test_packaging_metadata.py::test_version_matches_manifest` failed on `main` because of it
+  (the v0.2.7 release bumped `VERSION` without the manifest). Both now carry the same version, so
+  the parity test passes. **This is bookkeeping, not a version decision** — it makes the manifest
+  state the version that was already released rather than choosing a new one.
 
 ## v0.2.7 — 2026-07-07
 
