@@ -32,6 +32,26 @@ State to the user what you intend to do this session. Examples:
 
 This declaration anchors the session — `/debrief` later checks: did we do what we said?
 
+## 3b. The standing session shape — assume it, do not ask for it
+
+**UNLESS THE USER SAYS OTHERWISE IN THIS SESSION'S PROMPT, these are the defaults. They are not a
+suggestion to confirm and not a question to raise — a user who wants a different shape will say so.**
+
+- **Work to roughly 400K tokens**, then stop and run `/debrief`. Do not wind down early "to be
+  safe", and do not blow past it to finish one more thing.
+- **The debrief must be enough to start a successor COLD** — a session that has none of this
+  conversation, none of its context, and only the log. That is the acceptance test for the whole
+  closing ritual, and it is what the handover section is measured against.
+- ⚠ **A budget is not a licence to fill it.** If the declared work finishes at 120K, close cleanly
+  at 120K. The number is a *ceiling on running long*, never a floor on stopping short — padding a
+  session to reach it produces exactly the low-value tail a successor has to read past.
+
+🧨 **WHY THIS IS WRITTEN DOWN RATHER THAN REPEATED.** An operator was typing this rule into the
+prompt of **every session in every project**, which makes it a property of that operator's patience
+rather than of the process — and a rule that survives only by being re-typed is one bad day away
+from being absent. ⇒ If a project genuinely needs a different budget, it overrides here in its own
+`CLAUDE.md`, where the override is visible; it does not get re-negotiated per session.
+
 ## 4. Create the session log now
 
 Write `sessions/YYYY-MM-DD-<slug>.md` with frontmatter:
