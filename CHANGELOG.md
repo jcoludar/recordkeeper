@@ -2,6 +2,61 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## Unreleased
+
+### Fixed
+- **A stale `ended_at:` is now correctable — and only by a record.** `session_stop_log_timing.py`
+  considered only logs whose frontmatter had no `ended_at:` line, so a session that ran `/debrief`
+  (status → `done`, stamp written) and then kept working carried a **permanently wrong end time**.
+  The substrate whose stated purpose is curing end-time drift reintroduced it, silently.
+  The cause was one conflation: a single predicate answered both *"which log belongs to this
+  session?"* and *"may I write into it?"*, so the second question's answer silently rewrote the
+  first's — a closed log became **invisible**, which is indistinguishable from absent (hence the
+  symptom `no in-flight session log` rather than a refusal to overwrite).
+  Selection and authority are now separate. `select_log()` returns `(log, tier)` over three tiers of
+  evidence — the session-manifest **pointer**, the paperwork-enforcement **edit log**, then newest
+  **mtime** — and **only a record tier may correct a stamp already in the file.** The mtime tier may
+  still stamp an *open* log, never overwrite a committed value, and where it sees a stamp its own
+  mtime contradicts by more than two minutes it refuses and names both instants. A guess that
+  overwrites a record is worse than no correction: mtime reorders under a `git checkout` or a file-
+  sync with no session having run.
+  Adds 21 tests. No configuration change; projects running neither sibling substrate keep the
+  previous behaviour plus the advisory.
+
+- **The `SessionEnd` core stamper now refuses two things it used to do silently.** `hooks/
+  session_end_stamp.py` selects by **newest mtime**, which is a guess: it cannot tell whose log it
+  is looking at. It had no bound on that guess, and both failures below were found by other
+  projects running this hook and having to chase where a timestamp came from.
+  - **An `in_progress` log is no longer stamped.** Measured: a log received
+    `ended_at: 22:52:51` while `status:` still read `in_progress` and its session ran 13 minutes
+    longer. A missing `status:` is refused too — absence is not consent.
+    ⚠ **`paused` remains stampable, deliberately.** `SessionEnd` fires *once*, at true session end,
+    so a paused session really did end and its end time is real. This is **not** the Stop hook's
+    `status == "done"` rule: `Stop` fires at every assistant stop and must be stricter. Copying that
+    rule here would make the hook silently inert for every paused session.
+  - **A log this session plainly did not write is no longer stamped.** When a *new* session ends in
+    a repo still holding an *older* unstamped log, the old log used to get today's wall clock.
+    Measured in a peer project: a log whose session ran 05:12→05:44 was stamped **09:42:55** by a
+    different session that ended four hours later. A log this session closed was written seconds
+    ago, so the hook now refuses one untouched for more than `STALE_TOLERANCE_SECONDS` (30 min).
+  - Both refusals **print their reason**; a hook that declines in silence is indistinguishable from
+    one that is not installed, which is exactly the confusion that made this take a morning to
+    diagnose.
+  - ⚠ **Stated bound:** recency cannot separate two *concurrent* sessions in one project — both
+    write recently and mtime cannot attribute either. Fixing that needs a record, not a better
+    guess. Adds 6 tests; 7 of 7 mutants killed.
+  - ⛔ **Correction to the report that prompted this:** the hook was described for several weeks as
+    *"overwriting committed values."* It never could — it selects only logs lacking `ended_at:` and
+    has no `replace_ended_at`. It **fabricates a stamp into an empty field**, which is a different
+    defect and, on a repo with no correcting Stop hook, a permanent one.
+
+### Fixed — packaging
+- `.claude-plugin/plugin.json` declared `0.2.6` while `VERSION` declared `0.2.7`, and
+  `tests/test_packaging_metadata.py::test_version_matches_manifest` failed on `main` because of it
+  (the v0.2.7 release bumped `VERSION` without the manifest). Both now carry the same version, so
+  the parity test passes. **This is bookkeeping, not a version decision** — it makes the manifest
+  state the version that was already released rather than choosing a new one.
+
 ## v0.2.7 — 2026-07-07
 
 ### Changed

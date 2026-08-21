@@ -17,7 +17,8 @@ When the project keeps per-session logs under `sessions/` and the user wants dis
 
 - `/begin-session` slash command — orient at session start, declare focus, write the session log with `started_at:` filled.
 - `/debrief` slash command — work the end-of-session paperwork checklist; verify the log carries `status`, `followups`, blockers.
-- `session_stop_log_timing.py` — a non-blocking Stop hook that surgically writes `ended_at:` into the most-recent in-flight session log when the session ends. Fixes the lived problem that end-times drift if the model writes them manually.
+- `session_stop_log_timing.py` — a non-blocking Stop hook that surgically writes `ended_at:` into this session's log when the session ends. Fixes the lived problem that end-times drift if the model writes them manually.
+  It picks the log by the strongest evidence available (`select_log`): the session-manifest **pointer**, else the paperwork-enforcement **edit log**, else newest **mtime**. **Only a record may correct a stamp already in the file** — a session that debriefs and then keeps working is re-stamped when a record names its log, while the mtime tier may stamp an *open* log but never overwrite a committed value, and instead reports a stamp its own mtime contradicts. (A guess that overwrites a record is worse than no correction: mtime reorders under a `git checkout`, or when a file-sync client re-materialises a folder, with no session having run at all.)
 
 ## The session-log frontmatter contract
 

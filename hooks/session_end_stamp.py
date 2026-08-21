@@ -17,7 +17,30 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
+
+
+# ── TWO REFUSALS, each paid for by a wrong timestamp somebody had to chase ──────────────
+#
+# This hook's selection is `newest mtime`, which is a GUESS: it cannot tell whose log it is
+# looking at. Both gates below exist because a guess with no bound will confidently answer a
+# question it was never able to ask.
+#
+# ⚠ THE DOCTRINE, and it decides every tie here: PREFER NO STAMP OVER A FABRICATED ONE.
+# A missing `ended_at:` is honestly missing and anyone can see it. A fabricated one is
+# indistinguishable from a real measurement for the rest of the file's life — it survives
+# `git log`, it survives review, and it will be quoted back as evidence.
+
+# GATE 2's tolerance. A log that THIS session closed was written seconds ago; one untouched
+# for hours belongs to a session that is long gone.
+#   Measured, 2026-08-21, in a project running this hook: a log whose session ran 05:12→05:44
+#   was stamped `09:42:55` — by a DIFFERENT session that ended four hours later and merely
+#   happened to be the next one to end in that directory.
+#   ⚠ Deliberately generous. The cost of being too tight is a missing stamp (honest, visible,
+#   fixable by hand); the cost of being too loose is a fabricated one (invisible, permanent).
+#   Those costs are not symmetric, so the threshold is not centred.
+STALE_TOLERANCE_SECONDS = 1800  # 30 minutes
 
 
 # A session log's frontmatter is delimited by `---` fences. The CLOSING fence is
@@ -76,6 +99,59 @@ def started_at_value(text: str) -> str | None:
         return None
     m = _STARTED_AT_RE.search(fm)
     return m.group(1) if m else None
+
+
+_STATUS_RE = re.compile(r"^status:\s*[\"']?([A-Za-z_]+)", re.MULTILINE)
+
+# The author-declared terminal states. `paused` is HERE ON PURPOSE and it is the one line in
+# this file most likely to be "tidied" into `== "done"` by a future reader copying the
+# substrate's Stop hook. Do not.
+#   SessionEnd fires ONCE, at true session end. Stop fires at EVERY assistant stop, so the
+#   Stop hook must demand `done` or it would stamp mid-session. This hook has the opposite
+#   problem: a session that ends `paused` really did end, and its end time is real. Requiring
+#   `done` here would make the hook silently inert for every paused session forever.
+_TERMINAL_STATUSES = frozenset({"done", "paused"})
+
+
+def status_value(text: str) -> str | None:
+    fm = frontmatter_region(text)
+    if not fm:
+        return None
+    m = _STATUS_RE.search(fm)
+    return m.group(1) if m else None
+
+
+def is_closed_by_its_author(text: str) -> bool:
+    """GATE 1 — has anyone declared this session over?
+
+    An `in_progress` log is a session still being written. Stamping it asserts an end time
+    for something nobody has said has ended — measured: a log received `ended_at: 22:52:51`
+    while `status:` still read `in_progress` and its session ran 13 minutes longer.
+
+    A MISSING `status:` is refused too, and that is not an oversight: absence is not consent.
+    A log with no status has had no author declare anything about it.
+    """
+    return status_value(text) in _TERMINAL_STATUSES
+
+
+def was_touched_this_session(path: Path, now: float | None = None) -> bool:
+    """GATE 2 — is this plausibly a log THIS session wrote?
+
+    Selection is newest-mtime and there is no record here saying which log belongs to which
+    session (the session-manifest substrate has one; the plugin core ships no state dir).
+    So the honest bound is recency: a log this session closed was written moments ago.
+
+    ⚠ STATED BOUND, because it is a heuristic and should never be mistaken for a record:
+    this cannot separate two CONCURRENT sessions in one project — both write recently, and
+    mtime cannot attribute either. It only catches the measured case, which is a NEW session
+    ending in a repo that still holds an OLDER unstamped log. Fixing the concurrent case
+    needs a record, not a better guess.
+    """
+    try:
+        age = (time.time() if now is None else now) - path.stat().st_mtime
+    except OSError:
+        return False
+    return age <= STALE_TOLERANCE_SECONDS
 
 
 def clamp_ended_at(ended: str, started: str | None) -> str:
@@ -139,6 +215,25 @@ def main() -> int:
             )
             return 0
         text = path.read_text()
+        # Both refusals SAY SO on stderr. A hook that declines in silence is
+        # indistinguishable from one that is not installed, and this project has already
+        # paid for that confusion once — a peer spent a morning asking what had written a
+        # timestamp, because nothing anywhere announced who was writing them.
+        if not is_closed_by_its_author(text):
+            print(
+                f"session_end_stamp: {path.name} status is "
+                f"{status_value(text)!r}, not a terminal state; not stamping ended_at",
+                file=sys.stderr,
+            )
+            return 0
+        if not was_touched_this_session(path):
+            print(
+                f"session_end_stamp: {path.name} was last modified more than "
+                f"{STALE_TOLERANCE_SECONDS}s ago — it belongs to an earlier session, "
+                f"not this one; not stamping ended_at",
+                file=sys.stderr,
+            )
+            return 0
         timestamp = clamp_ended_at(now_iso(), started_at_value(text))
         path.write_text(insert_ended_at(text, timestamp))
         print(
