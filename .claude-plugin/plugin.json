@@ -1,7 +1,7 @@
 {
   "name": "recordkeeper",
   "description": "recordkeeper keeps your Claude Code sessions on track — it orients your agent at the start and leaves an honest, accurately-timestamped record at the end, so it can stay oriented on what you're doing and where you're going. Non-blocking by default; an opt-in gate won't let a session close until its record checks out.",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "author": { "name": "Joha Coludar", "email": "jcoludar@gmail.com" },
   "license": "MIT",
   "homepage": "https://github.com/jcoludar/recordkeeper",

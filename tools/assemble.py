@@ -197,12 +197,30 @@ def merge_settings(
     masterbook_root: Path,
     substrates: list[str],
     permissions_extra: list[str],
+    existing: dict | None = None,
 ) -> dict:
     """Merge always-on top-level fragments + selected substrate fragments + project extras.
 
     Reads ALL .json files in masterbook/settings-fragments/ unconditionally (always-on baselines).
     Reads masterbook/substrate/<name>/settings-fragment.json for each name in `substrates`.
     Merges both `permissions.allow` (string dedup) and `hooks` blocks (tuple dedup).
+
+    ⚠ `existing` IS THE PROJECT'S CURRENT settings.json, AND ITS NON-SUBSTRATE ENTRIES SURVIVE.
+    Before this, the caller wrote the merged object over the file with no read, so **every hook a
+    project had registered by hand was deleted by the documented deploy command** — silently, with
+    the only symptom being that those hooks stop firing.
+
+    Measured, 2026-08-20: running `assemble.py` to deploy an unrelated change removed three live
+    hook registrations that had been added by hand that afternoon. Nothing warned, the exit code
+    was 0, and the printed summary was unchanged. The failure is invisible from inside the tool and
+    invisible from inside the project — a deleted registration is observationally identical to one
+    that was never added.
+
+    `existing` is OPTIONAL and defaults to None, so every caller written before this change keeps
+    its exact previous behaviour. That matters here more than in most places: this is a published
+    tool with callers outside this repository.
+
+    A generator may own what it generates. It may not own what it did not write.
     """
     fragments_dir = masterbook_root / "settings-fragments"
 
@@ -251,6 +269,37 @@ def merge_settings(
             if matcher is not None:
                 clean_entry["matcher"] = matcher
             events.setdefault(event, []).append(clean_entry)
+
+    # ── PRESERVE what this generator did not write. ─────────────────────────────────────────────
+    # Any hook entry already in the project's settings whose command is not one the substrates
+    # produce is a project-local registration. It is carried over VERBATIM — including `timeout`
+    # and `statusMessage`, which the normalisation above drops — because a generator that silently
+    # rewrites a field it does not understand is the same defect one size smaller.
+    preserved: list[str] = []
+    if existing:
+        substrate_cmds = {cmd for _, _, cmd in seen_hooks}
+        for event, entries in (existing.get("hooks") or {}).items():
+            for entry in entries:
+                subs = [s for s in entry.get("hooks", [])
+                        if s.get("command", "") not in substrate_cmds]
+                if not subs:
+                    continue
+                kept = dict(entry)
+                kept["hooks"] = subs
+                events.setdefault(event, []).append(kept)
+                preserved.extend(f"{event}: {s.get('command', '')}" for s in subs)
+        # Same rule for permissions: a hand-added allow-rule is not the generator's to delete.
+        for p in (existing.get("permissions") or {}).get("allow", []):
+            if p not in seen_perms:
+                seen_perms.add(p)
+                deduped_perms.append(p)
+                preserved.append(f"permissions.allow: {p}")
+
+    if preserved:
+        # Say so. The whole failure was that it happened quietly.
+        print(f"  preserved {len(preserved)} project-local setting(s) not owned by any substrate:")
+        for p in preserved:
+            print(f"    · {p}")
 
     out: dict = {
         "$schema": "https://json.schemastore.org/claude-code-settings.json",
@@ -475,15 +524,27 @@ def main(argv: list[str] | None = None) -> int:
 
     emit_agents_md(artifact)
 
+    settings_path = project_path / ".claude" / "settings.json"
+    import json as _json
+    existing_settings: dict = {}
+    if settings_path.is_file():
+        try:
+            existing_settings = _json.loads(settings_path.read_text())
+        except (OSError, ValueError) as exc:
+            # Refuse rather than overwrite. An unparseable settings.json is a file someone is in
+            # the middle of editing, or one this tool would be about to destroy the only copy of.
+            print(f"⛔ {settings_path} exists and does not parse ({exc}).\n"
+                  f"   Refusing to overwrite it — fix or move it, then re-run.")
+            return 2
+
     settings_obj = merge_settings(
         masterbook_root=masterbook_root,
         substrates=requested_subs,
         permissions_extra=permissions_extra,
+        existing=existing_settings,
     )
 
-    settings_path = project_path / ".claude" / "settings.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
-    import json as _json
     settings_path.write_text(_json.dumps(settings_obj, indent=2) + "\n")
 
     deploy_commands(

@@ -2,6 +2,31 @@
 
 All notable changes to recordkeeper will be documented in this file.
 
+## 0.2.10
+
+### Fixed
+- **🧨 `assemble.py` deleted every hook a project had registered by hand.** `settings.json` was
+  written wholesale from substrate data with **no read of the existing file**, so the documented
+  deploy command silently removed any hook, and any `permissions.allow` rule, the consumer had added
+  themselves. Exit code 0, printed summary unchanged, and the only symptom was that those hooks
+  quietly stopped firing.
+
+  Measured 2026-08-20 in the development hub: running the assembler to deploy an *unrelated* change
+  removed three live hook registrations added by hand that afternoon. It is invisible from both
+  sides — the tool never loaded the prior state, and a deleted registration is observationally
+  identical to one that was never added — which is why nothing was watching for it.
+
+  `merge_settings()` now takes an optional `existing=` and carries over every hook entry and
+  allow-rule that no substrate produces. Preserved entries are copied **verbatim**, including
+  `timeout` and `statusMessage`, which the substrate-hook normalisation drops — a generator that
+  silently rewrites a field it does not understand is the same defect one size smaller. The
+  preservation is **printed**, because the whole failure was that it happened quietly. An
+  unparseable `settings.json` is now **refused rather than overwritten** (exit 2).
+
+  `existing=` defaults to `None`, so every caller written before this change is unaffected.
+
+  *A generator may own what it generates. It may not own what it did not write.*
+
 ## 0.2.9
 
 ### Added
@@ -23,7 +48,12 @@ All notable changes to recordkeeper will be documented in this file.
   Adds 4 tests. No configuration change; projects that want a different budget override it in their
   own `CLAUDE.md`.
 
-## Unreleased
+## 0.2.8
+
+> ⚠ Labelled retroactively on 2026-08-25. This section read `## Unreleased` while its content was
+> already on `main` and public: `VERSION` was bumped to `0.2.8` inside the fix commit (`3d7a956`)
+> rather than by a release commit, so the header was never written and the next release wrote
+> `## 0.2.9` above it. The work shipped; only the label was missing.
 
 ### Fixed
 - **A stale `ended_at:` is now correctable — and only by a record.** `session_stop_log_timing.py`
